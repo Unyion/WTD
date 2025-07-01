@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>What To Do?</title>
+    <title>WTD</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -120,16 +120,16 @@
                     </div>
                 </div>
 
-                <!-- Time dependent section -->
+                <!-- Time/Day dependent section -->
                 <div class="option-section">
                     <label class="main-checkbox">
                         <input type="checkbox" id="timeDependent">
                         <span class="checkmark"></span>
-                        Time Dependent
+                        Time/Day Dependent
                     </label>
                     
                     <div class="sub-options" id="timeOptions" style="display: none;">
-                        <p class="instruction-text">Set time constraints for this activity</p>
+                        <p class="instruction-text">Set time and day constraints for this activity</p>
                         
                         <label class="sub-checkbox daylight-checkbox">
                             <input type="checkbox" id="daylightOnly">
@@ -149,6 +149,54 @@
                                 <select id="endTime" class="time-select">
                                     <!-- Hours will be populated by JavaScript -->
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- Day of week section -->
+                        <label class="sub-checkbox">
+                            <input type="checkbox" id="dayOfWeek">
+                            <span class="checkmark"></span>
+                            Specific Days Only
+                        </label>
+                        
+                        <div class="sub-options" id="dayOfWeekOptions" style="display: none;">
+                            <p class="instruction-text">Select which days this activity is available</p>
+                            <div class="checkbox-group">
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="monday">
+                                    <span class="checkmark"></span>
+                                    Monday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="tuesday">
+                                    <span class="checkmark"></span>
+                                    Tuesday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="wednesday">
+                                    <span class="checkmark"></span>
+                                    Wednesday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="thursday">
+                                    <span class="checkmark"></span>
+                                    Thursday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="friday">
+                                    <span class="checkmark"></span>
+                                    Friday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="saturday">
+                                    <span class="checkmark"></span>
+                                    Saturday
+                                </label>
+                                <label class="sub-checkbox">
+                                    <input type="checkbox" value="sunday">
+                                    <span class="checkmark"></span>
+                                    Sunday
+                                </label>
                             </div>
                         </div>
                     </div>
