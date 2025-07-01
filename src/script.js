@@ -12,6 +12,7 @@ const endTimeSelect = document.getElementById('endTime');
 const addActivityButton = document.getElementById('addActivity');
 const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
+const weatherDisplay = document.getElementById('weatherDisplay');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     populateTimeOptions();
     loadActivities();
     updateWeather();
+    validateForm(); // Initial validation
 });
 
 // Setup all event listeners
@@ -35,6 +37,13 @@ function setupEventListeners() {
     
     // Input validation
     activityNameInput.addEventListener('input', validateForm);
+    
+    // Enter key in activity input
+    activityNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !addActivityButton.disabled) {
+            addActivity();
+        }
+    });
 }
 
 // Toggle weather options visibility
@@ -121,6 +130,14 @@ function populateTimeOptions() {
 function validateForm() {
     const isValid = activityNameInput.value.trim().length > 0;
     addActivityButton.disabled = !isValid;
+    
+    if (isValid) {
+        addActivityButton.style.opacity = '1';
+        addActivityButton.style.cursor = 'pointer';
+    } else {
+        addActivityButton.style.opacity = '0.5';
+        addActivityButton.style.cursor = 'not-allowed';
+    }
 }
 
 // Add new activity
@@ -128,12 +145,13 @@ async function addActivity() {
     const activityName = activityNameInput.value.trim();
     
     if (!activityName) {
-        alert('Please enter an activity name');
+        showNotification('Please enter an activity name', 'error');
         return;
     }
     
     // Collect form data
     const activity = {
+        id: Date.now().toString(), // Simple ID generation
         name: activityName,
         weatherDependent: weatherDependentCheckbox.checked,
         weatherRestrictions: [],
@@ -143,7 +161,8 @@ async function addActivity() {
         daylightOnly: daylightOnlyCheckbox.checked,
         startTime: startTimeSelect.value,
         endTime: endTimeSelect.value,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        enabled: true
     };
     
     // Collect weather restrictions
@@ -156,13 +175,30 @@ async function addActivity() {
     if (activity.seasonal) {
         const seasonalCheckboxes = seasonalOptions.querySelectorAll('input[type="checkbox"]:checked');
         activity.seasons = Array.from(seasonalCheckboxes).map(cb => cb.value);
+        
+        // Validate that at least one season is selected
+        if (activity.seasons.length === 0) {
+            showNotification('Please select at least one season', 'error');
+            return;
+        }
+    }
+    
+    // Validate time restrictions
+    if (activity.timeDependent && !activity.daylightOnly) {
+        const startHour = parseInt(activity.startTime.split(':')[0]);
+        const endHour = parseInt(activity.endTime.split(':')[0]);
+        
+        if (startHour >= endHour) {
+            showNotification('End time must be after start time', 'error');
+            return;
+        }
     }
     
     try {
-        // Save activity (will implement backend later)
+        // Save activity
         console.log('Adding activity:', activity);
         
-        // For now, store in localStorage
+        // Store in localStorage
         saveActivityToStorage(activity);
         
         // Reset form
@@ -174,6 +210,9 @@ async function addActivity() {
         // Show success message
         showNotification('Activity added successfully!', 'success');
         
+        // Focus back on input for quick adding
+        activityNameInput.focus();
+        
     } catch (error) {
         console.error('Error adding activity:', error);
         showNotification('Error adding activity', 'error');
@@ -183,6 +222,13 @@ async function addActivity() {
 // Save activity to localStorage (temporary storage)
 function saveActivityToStorage(activity) {
     let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+    
+    // Check for duplicate names
+    const existingActivity = activities.find(a => a.name.toLowerCase() === activity.name.toLowerCase());
+    if (existingActivity) {
+        throw new Error('Activity with this name already exists');
+    }
+    
     activities.push(activity);
     localStorage.setItem('wtd-activities', JSON.stringify(activities));
 }
@@ -199,44 +245,75 @@ function loadActivities() {
         return;
     }
     
+    // Filter and display activities
+    const currentConditions = getCurrentConditions();
+    
     activities.forEach((activity, index) => {
-        const activityElement = createActivityElement(activity, index);
+        const isAvailable = isActivityAvailable(activity, currentConditions);
+        const activityElement = createActivityElement(activity, index, isAvailable);
         activitiesList.appendChild(activityElement);
     });
 }
 
 // Create activity element for the list
-function createActivityElement(activity, index) {
+function createActivityElement(activity, index, isAvailable) {
     const div = document.createElement('div');
     div.className = 'activity-item';
-    div.style.cssText = `
+    
+    const baseStyle = `
         background-color: var(--button-bg);
         padding: 10px;
         margin-bottom: 8px;
         border-radius: 3px;
         cursor: pointer;
-        transition: background-color 0.2s ease;
-        border-left: 3px solid var(--accent);
+        transition: all 0.2s ease;
+        border-left: 3px solid ${isAvailable ? 'var(--accent)' : 'var(--fg-muted)'};
+        position: relative;
     `;
     
+    const disabledStyle = isAvailable ? '' : 'opacity: 0.5; filter: grayscale(100%);';
+    
+    div.style.cssText = baseStyle + disabledStyle;
+    
     div.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 5px;">${activity.name}</div>
-        <div style="font-size: 10px; color: var(--fg-muted);">
-            ${getActivityDetails(activity)}
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+                <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
+                <div style="font-size: 10px; color: var(--fg-muted);">
+                    ${getActivityDetails(activity)}
+                </div>
+                ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
+            </div>
+            <div style="display: flex; gap: 5px;">
+                <button class="edit-btn" style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 5px;" title="Edit">✎</button>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px;" title="Delete">🗑</button>
+            </div>
         </div>
     `;
     
+    // Event listeners
     div.addEventListener('mouseenter', () => {
-        div.style.backgroundColor = 'var(--button-active-bg)';
+        if (isAvailable) {
+            div.style.backgroundColor = 'var(--button-active-bg)';
+        }
     });
     
     div.addEventListener('mouseleave', () => {
         div.style.backgroundColor = 'var(--button-bg)';
     });
     
-    div.addEventListener('click', () => {
-        // TODO: Implement activity editing
-        console.log('Edit activity:', activity);
+    // Edit button
+    const editBtn = div.querySelector('.edit-btn');
+    editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editActivity(activity);
+    });
+    
+    // Delete button
+    const deleteBtn = div.querySelector('.delete-btn');
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteActivity(activity.id);
     });
     
     return div;
@@ -265,6 +342,251 @@ function getActivityDetails(activity) {
     return details.length > 0 ? details.join(' • ') : 'No restrictions';
 }
 
+// Check if activity is available based on current conditions
+function isActivityAvailable(activity, conditions) {
+    // Weather check
+    if (activity.weatherDependent && activity.weatherRestrictions.length > 0) {
+        if (activity.weatherRestrictions.some(restriction => 
+            conditions.weather.toLowerCase().includes(restriction.toLowerCase()))) {
+            return false;
+        }
+    }
+    
+    // Season check
+    if (activity.seasonal && activity.seasons.length > 0) {
+        if (!activity.seasons.includes(conditions.season.toLowerCase())) {
+            return false;
+        }
+    }
+    
+    // Time check
+    if (activity.timeDependent) {
+        if (activity.daylightOnly) {
+            // Check if current time is between sunrise and sunset
+            // For now, using simplified 6am-8pm as daylight hours
+            const currentHour = conditions.currentTime.getHours();
+            if (currentHour < 6 || currentHour > 20) {
+                return false;
+            }
+        } else {
+            // Check custom time range
+            const currentHour = conditions.currentTime.getHours();
+            const startHour = parseInt(activity.startTime.split(':')[0]);
+            const endHour = parseInt(activity.endTime.split(':')[0]);
+            
+            if (currentHour < startHour || currentHour >= endHour) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Get current conditions
+function getCurrentConditions() {
+    const now = new Date();
+    const month = now.getMonth();
+    
+    // Determine season based on month
+    let season;
+    if (month >= 2 && month <= 4) season = 'spring';
+    else if (month >= 5 && month <= 7) season = 'summer';
+    else if (month >= 8 && month <= 10) season = 'fall';
+    else season = 'winter';
+    
+    return {
+        weather: 'sunny', // TODO: Get from weather API
+        season: season,
+        currentTime: now
+    };
+}
+
+// Suggest random activity
+async function suggestActivity() {
+    const activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+    
+    if (activities.length === 0) {
+        showNotification('Add some activities first!', 'info');
+        return;
+    }
+    
+    // Filter available activities
+    const currentConditions = getCurrentConditions();
+    const availableActivities = activities.filter(activity => 
+        isActivityAvailable(activity, currentConditions)
+    );
+    
+    if (availableActivities.length === 0) {
+        showNotification('No activities are available right now based on current conditions', 'warning');
+        return;
+    }
+    
+    // Select random activity
+    const randomIndex = Math.floor(Math.random() * availableActivities.length);
+    const selectedActivity = availableActivities[randomIndex];
+    
+    // Show suggestion
+    showActivitySuggestion(selectedActivity);
+}
+
+// Show activity suggestion modal
+function showActivitySuggestion(activity) {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 400px;
+        text-align: center;
+        color: var(--fg-light);
+    `;
+    
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 20px;">Suggested Activity</h2>
+        <div style="font-size: 24px; font-weight: bold; margin-bottom: 15px;">${activity.name}</div>
+        <div style="font-size: 12px; color: var(--fg-muted); margin-bottom: 20px;">
+            ${getActivityDetails(activity)}
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="acceptSuggestion" style="
+                background-color: var(--accent);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Perfect!</button>
+            <button id="newSuggestion" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Suggest Another</button>
+            <button id="closeSuggestion" style="
+                background-color: #666;
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Close</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Event listeners for modal buttons
+    document.getElementById('acceptSuggestion').addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        showNotification(`Great choice! Enjoy your ${activity.name}!`, 'success');
+    });
+    
+    document.getElementById('newSuggestion').addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        suggestActivity();
+    });
+    
+    document.getElementById('closeSuggestion').addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    // Close on escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Edit activity
+function editActivity(activity) {
+    // Populate form with activity data
+    activityNameInput.value = activity.name;
+    weatherDependentCheckbox.checked = activity.weatherDependent;
+    seasonalCheckbox.checked = activity.seasonal;
+    timeDependentCheckbox.checked = activity.timeDependent;
+    daylightOnlyCheckbox.checked = activity.daylightOnly;
+    startTimeSelect.value = activity.startTime;
+    endTimeSelect.value = activity.endTime;
+    
+    // Show/hide relevant sections
+    toggleWeatherOptions();
+    toggleSeasonalOptions();
+    toggleTimeOptions();
+    toggleDaylightOnly();
+    
+    // Check weather restrictions
+    if (activity.weatherDependent) {
+        activity.weatherRestrictions.forEach(restriction => {
+            const checkbox = weatherOptions.querySelector(`input[value="${restriction}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+    
+    // Check seasons
+    if (activity.seasonal) {
+        activity.seasons.forEach(season => {
+            const checkbox = seasonalOptions.querySelector(`input[value="${season}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+    
+    // Change button text and store editing state
+    addActivityButton.textContent = 'Update Activity';
+    addActivityButton.dataset.editingId = activity.id;
+    
+    // Scroll to top of form
+    activityNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    activityNameInput.focus();
+    
+    validateForm();
+}
+
+// Delete activity
+function deleteActivity(activityId) {
+    if (confirm('Are you sure you want to delete this activity?')) {
+        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+        activities = activities.filter(activity => activity.id !== activityId);
+        localStorage.setItem('wtd-activities', JSON.stringify(activities));
+        
+        loadActivities();
+        showNotification('Activity deleted', 'success');
+    }
+}
+
 // Reset form to initial state
 function resetForm() {
     activityNameInput.value = '';
@@ -280,4 +602,106 @@ function resetForm() {
     
     // Reset time selects
     startTimeSelect.value = '09:00';
-    endTime
+    endTimeSelect.value = '17:00';
+    
+    // Uncheck all sub-options
+    const allCheckboxes = document.querySelectorAll('.sub-options input[type="checkbox"]');
+    allCheckboxes.forEach(cb => cb.checked = false);
+    
+    // Reset button
+    addActivityButton.textContent = 'Add Activity';
+    delete addActivityButton.dataset.editingId;
+    
+    validateForm();
+}
+
+// Update weather display
+async function updateWeather() {
+    try {
+        // TODO: Implement actual weather API
+        // For now, show placeholder
+        const weatherEmojis = ['☀️', '⛅', '☁️', '🌧️', '⛈️', '❄️'];
+        const conditions = ['Sunny', 'Partly Cloudy', 'Cloudy', 'Rainy', 'Stormy', 'Snowy'];
+        const temps = [75, 78, 82, 85, 88, 91];
+        
+        const randomIndex = Math.floor(Math.random() * weatherEmojis.length);
+        const emoji = weatherEmojis[randomIndex];
+        const condition = conditions[randomIndex];
+        const temp = temps[Math.floor(Math.random() * temps.length)];
+        
+        weatherDisplay.textContent = `${emoji} ${condition}, ${temp}°`;
+        
+        // Update activities list based on new weather
+        loadActivities();
+        
+    } catch (error) {
+        console.error('Error updating weather:', error);
+        weatherDisplay.textContent = '☀️ Weather unavailable';
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // Remove existing notification
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    
+    const colors = {
+        success: '#4CAF50',
+        error: '#ff6b6b',
+        warning: '#ff9800',
+        info: '#2196F3'
+    };
+    
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: ${colors[type] || colors.info};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Utility function to get season from date
+function getSeasonFromDate(date) {
+    const month = date.getMonth();
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'fall';
+    return 'winter';
+}
+
+// Update weather every 5 minutes
+setInterval(updateWeather, 5 * 60 * 1000);
