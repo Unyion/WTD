@@ -54,7 +54,7 @@ body {
 
 .main-title h1 {
     font-family: 'Academy Engraved LET', 'Arial', sans-serif;
-    font-size: 24px;
+    font-size: 28px;
     color: var(--fg-light);
     font-weight: normal;
 }
@@ -103,7 +103,7 @@ body {
 
 .left-column h2 {
     font-family: 'Baskerville', 'Arial', serif;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     text-align: center;
     margin-bottom: 15px;
@@ -161,7 +161,7 @@ body {
 
 .add-activity-section h2 {
     font-family: 'Baskerville', 'Arial', serif;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     text-align: center;
     margin-bottom: 15px;
@@ -285,6 +285,7 @@ body {
 
 .time-controls {
     margin-top: 10px;
+    margin-bottom: 15px;
 }
 
 .time-input-group {
@@ -357,6 +358,6 @@ body {
 }
 
 .sub-options.show {
-    max-height: 300px;
+    max-height: 500px;
     opacity: 1;
 }
