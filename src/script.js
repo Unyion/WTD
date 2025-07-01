@@ -325,7 +325,7 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
                 ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
-                <button class="edit-btn" style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 5px;" title="Edit">✎</button>
+                <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
                 <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑</button>
             </div>
         </div>
@@ -379,11 +379,17 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
         showContextMenu(e, activity);
     });
     
-    // Edit button
+    // Edit button with hover effect
     const editBtn = div.querySelector('.edit-btn');
+    editBtn.addEventListener('mouseenter', () => {
+        editBtn.style.color = 'var(--accent)';
+    });
+    editBtn.addEventListener('mouseleave', () => {
+        editBtn.style.color = 'var(--fg-muted)';
+    });
     editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        editActivity(activity);
+        showEditModal(activity);
     });
     
     // Delete button with hover effect
@@ -597,7 +603,7 @@ function showContextMenu(event, activity) {
         editOption.style.backgroundColor = 'transparent';
     });
     editOption.addEventListener('click', () => {
-        editActivity(activity);
+        showEditModal(activity);
         hideContextMenu();
     });
     
@@ -791,61 +797,461 @@ function showActivitySuggestion(activity) {
     document.addEventListener('keydown', handleEscape);
 }
 
-// Edit activity
-function editActivity(activity) {
-    // Populate form with activity data
-    activityNameInput.value = activity.name;
-    weatherDependentCheckbox.checked = activity.weatherDependent;
-    seasonalCheckbox.checked = activity.seasonal;
-    timeDependentCheckbox.checked = activity.timeDependent;
-    daylightOnlyCheckbox.checked = activity.daylightOnly;
-    startTimeSelect.value = activity.startTime;
-    endTimeSelect.value = activity.endTime;
+// Show edit modal
+function showEditModal(activity) {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'edit-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
     
-    if (dayOfWeekCheckbox) {
-        dayOfWeekCheckbox.checked = activity.dayOfWeekDependent || false;
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        color: var(--fg-light);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    `;
+    
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 18px; text-align: center;">Edit Activity</h2>
+        
+        <!-- Activity name input -->
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="editActivityName" placeholder="Enter activity name..." style="
+                width: 100%;
+                background-color: var(--input-bg);
+                color: var(--fg-light);
+                border: 1px solid var(--button-bg);
+                padding: 8px 12px;
+                font-size: 12px;
+                border-radius: 3px;
+                outline: none;
+            " value="${activity.name}">
+        </div>
+
+        <!-- Weather dependent section -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 8px; font-size: 12px;">
+                <input type="checkbox" id="editWeatherDependent" ${activity.weatherDependent ? 'checked' : ''} style="margin-right: 10px;">
+                Weather Dependent
+            </label>
+            
+            <div id="editWeatherOptions" style="margin-left: 26px; ${activity.weatherDependent ? '' : 'display: none;'}">
+                <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Select weather conditions that prevent this activity</p>
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    ${['rain', 'storm', 'wind', 'snow'].map(condition => `
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" value="${condition}" ${activity.weatherRestrictions && activity.weatherRestrictions.includes(condition) ? 'checked' : ''} style="margin-right: 10px;">
+                            ${condition.charAt(0).toUpperCase() + condition.slice(1)}
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+
+        <!-- Seasonal section -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 8px; font-size: 12px;">
+                <input type="checkbox" id="editSeasonal" ${activity.seasonal ? 'checked' : ''} style="margin-right: 10px;">
+                Seasonal
+            </label>
+            
+            <div id="editSeasonalOptions" style="margin-left: 26px; ${activity.seasonal ? '' : 'display: none;'}">
+                <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Select available seasons</p>
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    ${['spring', 'summer', 'fall', 'winter'].map(season => `
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" value="${season}" ${activity.seasons && activity.seasons.includes(season) ? 'checked' : ''} style="margin-right: 10px;">
+                            ${season.charAt(0).toUpperCase() + season.slice(1)}
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+
+        <!-- Time/Day dependent section -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 8px; font-size: 12px;">
+                <input type="checkbox" id="editTimeDependent" ${activity.timeDependent ? 'checked' : ''} style="margin-right: 10px;">
+                Time/Day Dependent
+            </label>
+            
+            <div id="editTimeOptions" style="margin-left: 26px; ${activity.timeDependent ? '' : 'display: none;'}">
+                <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Set time and day constraints</p>
+                
+                <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 15px; font-size: 12px;">
+                    <input type="checkbox" id="editDaylightOnly" ${activity.daylightOnly ? 'checked' : ''} style="margin-right: 10px;">
+                    Daylight Only (Sunrise to Sunset)
+                </label>
+                
+                <div id="editTimeControls" style="margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 10px; gap: 10px;">
+                        <label style="min-width: 70px; font-size: 10px;">Start Time:</label>
+                        <select id="editStartTime" style="background-color: var(--input-bg); color: var(--fg-light); border: 1px solid var(--button-bg); padding: 4px 8px; font-size: 10px; border-radius: 3px; width: 80px;" ${activity.daylightOnly ? 'disabled' : ''}>
+                            ${Array.from({length: 24}, (_, i) => {
+                                const hour = i.toString().padStart(2, '0') + ':00';
+                                return `<option value="${hour}" ${activity.startTime === hour ? 'selected' : ''}>${hour}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="min-width: 70px; font-size: 10px;">End Time:</label>
+                        <select id="editEndTime" style="background-color: var(--input-bg); color: var(--fg-light); border: 1px solid var(--button-bg); padding: 4px 8px; font-size: 10px; border-radius: 3px; width: 80px;" ${activity.daylightOnly ? 'disabled' : ''}>
+                            ${Array.from({length: 24}, (_, i) => {
+                                const hour = i.toString().padStart(2, '0') + ':00';
+                                return `<option value="${hour}" ${activity.endTime === hour ? 'selected' : ''}>${hour}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                </div>
+
+                <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 8px; font-size: 12px;">
+                    <input type="checkbox" id="editDayOfWeek" ${activity.dayOfWeekDependent ? 'checked' : ''} style="margin-right: 10px;">
+                    Specific Days Only
+                </label>
+                
+                <div id="editDayOfWeekOptions" style="margin-left: 26px; ${activity.dayOfWeekDependent ? '' : 'display: none;'}">
+                    <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Select available days</p>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        ${['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => `
+                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                                <input type="checkbox" value="${day}" ${activity.daysOfWeek && activity.daysOfWeek.includes(day) ? 'checked' : ''} style="margin-right: 10px;">
+                                ${day.charAt(0).toUpperCase() + day.slice(1)}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+            <button id="saveEditBtn" style="
+                background-color: var(--accent);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Save Changes</button>
+            <button id="cancelEditBtn" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Setup event listeners for the modal
+    setupEditModalEventListeners(activity);
+    
+    // Focus on the name input
+    document.getElementById('editActivityName').focus();
+}
+
+// Setup event listeners for edit modal
+function setupEditModalEventListeners(originalActivity) {
+    const weatherCheckbox = document.getElementById('editWeatherDependent');
+    const weatherOptions = document.getElementById('editWeatherOptions');
+    const seasonalCheckbox = document.getElementById('editSeasonal');
+    const seasonalOptions = document.getElementById('editSeasonalOptions');
+    const timeCheckbox = document.getElementById('editTimeDependent');
+    const timeOptions = document.getElementById('editTimeOptions');
+    const daylightCheckbox = document.getElementById('editDaylightOnly');
+    const timeControls = document.getElementById('editTimeControls');
+    const dayOfWeekCheckbox = document.getElementById('editDayOfWeek');
+    const dayOfWeekOptions = document.getElementById('editDayOfWeekOptions');
+    const startTimeSelect = document.getElementById('editStartTime');
+    const endTimeSelect = document.getElementById('editEndTime');
+    
+    // Toggle functions for modal
+    weatherCheckbox.addEventListener('change', () => {
+        weatherOptions.style.display = weatherCheckbox.checked ? 'block' : 'none';
+        if (!weatherCheckbox.checked) {
+            weatherOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+    });
+    
+    seasonalCheckbox.addEventListener('change', () => {
+        seasonalOptions.style.display = seasonalCheckbox.checked ? 'block' : 'none';
+        if (!seasonalCheckbox.checked) {
+            seasonalOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+    });
+    
+    timeCheckbox.addEventListener('change', () => {
+        timeOptions.style.display = timeCheckbox.checked ? 'block' : 'none';
+        if (!timeCheckbox.checked) {
+            daylightCheckbox.checked = false;
+            dayOfWeekCheckbox.checked = false;
+            dayOfWeekOptions.style.display = 'none';
+            dayOfWeekOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+    });
+    
+    daylightCheckbox.addEventListener('change', () => {
+        const isDisabled = daylightCheckbox.checked;
+        startTimeSelect.disabled = isDisabled;
+        endTimeSelect.disabled = isDisabled;
+    });
+    
+    dayOfWeekCheckbox.addEventListener('change', () => {
+        dayOfWeekOptions.style.display = dayOfWeekCheckbox.checked ? 'block' : 'none';
+        if (!dayOfWeekCheckbox.checked) {
+            dayOfWeekOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+    });
+    
+    // Save button
+    document.getElementById('saveEditBtn').addEventListener('click', () => {
+        saveEditedActivity(originalActivity);
+    });
+    
+    // Cancel button
+    document.getElementById('cancelEditBtn').addEventListener('click', () => {
+        closeEditModal();
+    });
+    
+    // Close on overlay click
+    document.getElementById('edit-modal-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'edit-modal-overlay') {
+            closeEditModal();
+        }
+    });
+    
+    // Close on escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeEditModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Save edited activity
+function saveEditedActivity(originalActivity) {
+    const activityName = document.getElementById('editActivityName').value.trim();
+    
+    if (!activityName) {
+        showNotification('Please enter an activity name', 'error');
+        return;
     }
     
-    // Show/hide relevant sections
-    toggleWeatherOptions();
-    toggleSeasonalOptions();
-    toggleTimeOptions();
-    toggleDaylightOnly();
-    toggleDayOfWeekOptions();
+    // Collect updated data
+    const updatedActivity = {
+        ...originalActivity,
+        name: activityName,
+        weatherDependent: document.getElementById('editWeatherDependent').checked,
+        weatherRestrictions: [],
+        seasonal: document.getElementById('editSeasonal').checked,
+        seasons: [],
+        timeDependent: document.getElementById('editTimeDependent').checked,
+        daylightOnly: document.getElementById('editDaylightOnly').checked,
+        startTime: document.getElementById('editStartTime').value,
+        endTime: document.getElementById('editEndTime').value,
+        dayOfWeekDependent: document.getElementById('editDayOfWeek').checked,
+        daysOfWeek: []
+    };
     
-    // Check weather restrictions
-    if (activity.weatherDependent) {
-        activity.weatherRestrictions.forEach(restriction => {
-            const checkbox = weatherOptions.querySelector(`input[value="${restriction}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
+    // Collect weather restrictions
+    if (updatedActivity.weatherDependent) {
+        const weatherCheckboxes = document.getElementById('editWeatherOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.weatherRestrictions = Array.from(weatherCheckboxes).map(cb => cb.value);
     }
     
-    // Check seasons
-    if (activity.seasonal) {
-        activity.seasons.forEach(season => {
-            const checkbox = seasonalOptions.querySelector(`input[value="${season}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
+    // Collect seasonal restrictions
+    if (updatedActivity.seasonal) {
+        const seasonalCheckboxes = document.getElementById('editSeasonalOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.seasons = Array.from(seasonalCheckboxes).map(cb => cb.value);
+        
+        if (updatedActivity.seasons.length === 0) {
+            showNotification('Please select at least one season', 'error');
+            return;
+        }
     }
     
-    // Check days of week
-    if (activity.dayOfWeekDependent && activity.daysOfWeek && dayOfWeekOptions) {
-        activity.daysOfWeek.forEach(day => {
-            const checkbox = dayOfWeekOptions.querySelector(`input[value="${day}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
+    // Collect day of week restrictions
+    if (updatedActivity.dayOfWeekDependent) {
+        const dayCheckboxes = document.getElementById('editDayOfWeekOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.daysOfWeek = Array.from(dayCheckboxes).map(cb => cb.value);
+        
+        if (updatedActivity.daysOfWeek.length === 0) {
+            showNotification('Please select at least one day of the week', 'error');
+            return;
+        }
     }
     
-    // Change button text and store editing state
-    addActivityButton.textContent = 'Update Activity';
-    addActivityButton.dataset.editingId = activity.id;
+    // Validate time range
+    if (updatedActivity.timeDependent && !updatedActivity.daylightOnly) {
+        const startHour = parseInt(updatedActivity.startTime.split(':')[0]);
+        const endHour = parseInt(updatedActivity.endTime.split(':')[0]);
+        
+        if (startHour >= endHour) {
+            showNotification('End time must be after start time', 'error');
+            return;
+        }
+    }
     
-    // Scroll to top of form
-    activityNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    activityNameInput.focus();
+    try {
+        // Update activity in storage
+        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+        const index = activities.findIndex(a => a.id === originalActivity.id);
+        
+        if (index !== -1) {
+            // Check for duplicate names (excluding current activity)
+            const existingActivity = activities.find(a => a.id !== originalActivity.id && a.name.toLowerCase() === activityName.toLowerCase());
+            if (existingActivity) {
+                showNotification('Activity with this name already exists', 'error');
+                return;
+            }
+            
+            activities[index] = updatedActivity;
+            localStorage.setItem('wtd-activities', JSON.stringify(activities));
+            
+            // Close modal and refresh
+            closeEditModal();
+            loadActivities();
+            showNotification('Activity updated successfully!', 'success');
+        }
+    } catch (error) {
+        console.error('Error updating activity:', error);
+        showNotification('Error updating activity', 'error');
+    }
+}
+
+// Close edit modal
+function closeEditModal() {
+    const overlay = document.getElementById('edit-modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+// Update weather display (updated version)
+async function updateWeather() {
+    try {
+        // You'll need to get an API key from OpenWeatherMap
+        // For now, I'm using a placeholder API key - replace with your actual key
+        const API_KEY = 'YOUR_API_KEY_HERE'; // Replace with your OpenWeatherMap API key
+        const city = 'Fort Collins'; // Default location, can be made configurable later
+        
+        // For demonstration, I'll show how to implement it
+        // Uncomment and use your API key when ready:
+        /*
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=imperial`);
+        
+        if (response.ok) {
+            const weatherData = await response.json();
+            const condition = weatherData.weather[0].main.toLowerCase();
+            const temp = Math.round(weatherData.main.temp);
+            const emoji = getWeatherEmoji(condition);
+            
+            weatherDisplay.textContent = `${emoji} ${weatherData.weather[0].description}, ${temp}°F`;
+            
+            // Update activities list based on new weather
+            loadActivities();
+        } else {
+            throw new Error('Weather API request failed');
+        }
+        */
+        
+        // Temporary simulation until you add your API key
+        const weatherConditions = [
+            { emoji: '☀️', condition: 'sunny', temp: 85 },
+            { emoji: '⛅', condition: 'partly cloudy', temp: 78 },
+            { emoji: '☁️', condition: 'cloudy', temp: 72 },
+            { emoji: '🌧️', condition: 'rain', temp: 65 },
+            { emoji: '⛈️', condition: 'storm', temp: 60 },
+            { emoji: '💨', condition: 'wind', temp: 70 },
+            { emoji: '❄️', condition: 'snow', temp: 32 }
+        ];
+        
+        const randomWeather = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
+        weatherDisplay.textContent = `${randomWeather.emoji} ${randomWeather.condition}, ${randomWeather.temp}°F`;
+        
+        // Update activities list based on simulated weather
+        loadActivities();
+        
+    } catch (error) {
+        console.error('Error updating weather:', error);
+        weatherDisplay.textContent = '☀️ Weather unavailable';
+    }
+}
+
+// Get weather emoji based on condition
+function getWeatherEmoji(condition) {
+    const emojiMap = {
+        'clear': '☀️',
+        'clouds': '☁️',
+        'rain': '🌧️',
+        'drizzle': '🌦️',
+        'thunderstorm': '⛈️',
+        'snow': '❄️',
+        'mist': '🌫️',
+        'fog': '🌫️',
+        'haze': '🌫️',
+        'dust': '🌪️',
+        'sand': '🌪️',
+        'ash': '🌋',
+        'squall': '💨',
+        'tornado': '🌪️'
+    };
     
-    validateForm();
+    return emojiMap[condition.toLowerCase()] || '☀️';
+}
+
+// Get current conditions (updated to use actual weather data)
+function getCurrentConditions() {
+    const now = new Date();
+    const month = now.getMonth();
+    
+    // Determine season based on month
+    let season;
+    if (month >= 2 && month <= 4) season = 'spring';
+    else if (month >= 5 && month <= 7) season = 'summer';
+    else if (month >= 8 && month <= 10) season = 'fall';
+    else season = 'winter';
+    
+    // Extract current weather from display
+    const weatherText = weatherDisplay.textContent.toLowerCase();
+    let weather = 'sunny'; // default
+    
+    if (weatherText.includes('rain')) weather = 'rain';
+    else if (weatherText.includes('storm')) weather = 'storm';
+    else if (weatherText.includes('wind')) weather = 'wind';
+    else if (weatherText.includes('snow')) weather = 'snow';
+    else if (weatherText.includes('cloudy')) weather = 'cloudy';
+    
+    return {
+        weather: weather,
+        season: season,
+        currentTime: now
+    };
 }
 
 // Delete activity
@@ -893,30 +1299,7 @@ function resetForm() {
     validateForm();
 }
 
-// Update weather display
-async function updateWeather() {
-    try {
-        // TODO: Implement actual weather API
-        // For now, show placeholder
-        const weatherEmojis = ['☀️', '⛅', '☁️', '🌧️', '⛈️', '❄️'];
-        const conditions = ['Sunny', 'Partly Cloudy', 'Cloudy', 'Rainy', 'Stormy', 'Snowy'];
-        const temps = [75, 78, 82, 85, 88, 91];
-        
-        const randomIndex = Math.floor(Math.random() * weatherEmojis.length);
-        const emoji = weatherEmojis[randomIndex];
-        const condition = conditions[randomIndex];
-        const temp = temps[Math.floor(Math.random() * temps.length)];
-        
-        weatherDisplay.textContent = `${emoji} ${condition}, ${temp}°`;
-        
-        // Update activities list based on new weather
-        loadActivities();
-        
-    } catch (error) {
-        console.error('Error updating weather:', error);
-        weatherDisplay.textContent = '☀️ Weather unavailable';
-    }
-}
+
 
 // Show notification
 function showNotification(message, type = 'info') {
