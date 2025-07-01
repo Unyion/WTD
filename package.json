@@ -1,0 +1,40 @@
+{
+  "name": "wtd-app",
+  "version": "1.0.0",
+  "description": "What To Do - Activity suggestion app based on weather and preferences",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": ["activity", "weather", "recommendation", "desktop"],
+  "author": "Jackson Bigelow",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.jacksonbigelow.wtd",
+    "productName": "What To Do",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.lifestyle"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
