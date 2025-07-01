@@ -18,7 +18,8 @@ function createWindow() {
     },
     titleBarStyle: 'default',
     show: false, // Don't show until ready
-    backgroundColor: '#212121'
+    backgroundColor: '#212121',
+    title: 'WTD'
   });
 
   // Load the app
@@ -56,7 +57,7 @@ app.on('activate', () => {
   }
 });
 
-// IPC handlers
+// IPC handlers for future weather API integration
 ipcMain.handle('get-weather', async () => {
   // TODO: Implement weather API calls
   return { condition: 'sunny', temp: 85 };
