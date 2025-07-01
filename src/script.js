@@ -1155,10 +1155,14 @@ function closeEditModal() {
 // Update weather display (updated version)
 async function updateWeather() {
     try {
-        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+        // You'll need to get an API key from OpenWeatherMap
+        // For now, I'm using a placeholder API key - replace with your actual key
+        const API_KEY = 'YOUR_API_KEY_HERE'; // Replace with your OpenWeatherMap API key
         const city = 'Fort Collins'; // Default location, can be made configurable later
         
-
+        // For demonstration, I'll show how to implement it
+        // Uncomment and use your API key when ready:
+        /*
         const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=imperial`);
         
         if (response.ok) {
@@ -1174,6 +1178,24 @@ async function updateWeather() {
         } else {
             throw new Error('Weather API request failed');
         }
+        */
+        
+        // Temporary simulation until you add your API key
+        const weatherConditions = [
+            { emoji: '☀️', condition: 'sunny', temp: 85 },
+            { emoji: '⛅', condition: 'partly cloudy', temp: 78 },
+            { emoji: '☁️', condition: 'cloudy', temp: 72 },
+            { emoji: '🌧️', condition: 'rain', temp: 65 },
+            { emoji: '⛈️', condition: 'storm', temp: 60 },
+            { emoji: '💨', condition: 'wind', temp: 70 },
+            { emoji: '❄️', condition: 'snow', temp: 32 }
+        ];
+        
+        const randomWeather = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
+        weatherDisplay.textContent = `${randomWeather.emoji} ${randomWeather.condition}, ${randomWeather.temp}°F`;
+        
+        // Update activities list based on simulated weather
+        loadActivities();
         
     } catch (error) {
         console.error('Error updating weather:', error);
@@ -1217,13 +1239,15 @@ function getCurrentConditions() {
     
     // Extract current weather from display
     const weatherText = weatherDisplay.textContent.toLowerCase();
-    let weather = 'sunny'; // default
+    let weather = 'clear'; // default to clear/sunny
     
-    if (weatherText.includes('rain')) weather = 'rain';
-    else if (weatherText.includes('storm')) weather = 'storm';
-    else if (weatherText.includes('wind')) weather = 'wind';
+    // Map weather conditions from API to our activity restrictions
+    if (weatherText.includes('rain') || weatherText.includes('drizzle')) weather = 'rain';
+    else if (weatherText.includes('storm') || weatherText.includes('thunderstorm')) weather = 'storm';
+    else if (weatherText.includes('wind') || weatherText.includes('squall')) weather = 'wind';
     else if (weatherText.includes('snow')) weather = 'snow';
-    else if (weatherText.includes('cloudy')) weather = 'cloudy';
+    else if (weatherText.includes('cloud')) weather = 'cloudy';
+    else if (weatherText.includes('clear') || weatherText.includes('sunny')) weather = 'clear';
     
     return {
         weather: weather,
