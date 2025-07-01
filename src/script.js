@@ -9,6 +9,8 @@ const daylightOnlyCheckbox = document.getElementById('daylightOnly');
 const timeControls = document.getElementById('timeControls');
 const startTimeSelect = document.getElementById('startTime');
 const endTimeSelect = document.getElementById('endTime');
+const dayOfWeekCheckbox = document.getElementById('dayOfWeek');
+const dayOfWeekOptions = document.getElementById('dayOfWeekOptions');
 const addActivityButton = document.getElementById('addActivity');
 const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
@@ -30,6 +32,7 @@ function setupEventListeners() {
     seasonalCheckbox.addEventListener('change', toggleSeasonalOptions);
     timeDependentCheckbox.addEventListener('change', toggleTimeOptions);
     daylightOnlyCheckbox.addEventListener('change', toggleDaylightOnly);
+    if (dayOfWeekCheckbox) dayOfWeekCheckbox.addEventListener('change', toggleDayOfWeekOptions);
     
     // Button clicks
     addActivityButton.addEventListener('click', addActivity);
@@ -87,7 +90,24 @@ function toggleTimeOptions() {
         
         // Reset time options
         daylightOnlyCheckbox.checked = false;
+        if (dayOfWeekCheckbox) dayOfWeekCheckbox.checked = false;
         toggleDaylightOnly();
+        toggleDayOfWeekOptions();
+    }
+}
+
+// Toggle day of week options visibility
+function toggleDayOfWeekOptions() {
+    if (dayOfWeekCheckbox && dayOfWeekCheckbox.checked && dayOfWeekOptions) {
+        dayOfWeekOptions.style.display = 'block';
+        setTimeout(() => dayOfWeekOptions.classList.add('show'), 10);
+    } else if (dayOfWeekOptions) {
+        dayOfWeekOptions.classList.remove('show');
+        setTimeout(() => dayOfWeekOptions.style.display = 'none', 300);
+        
+        // Uncheck all day sub-options
+        const dayCheckboxes = dayOfWeekOptions.querySelectorAll('input[type="checkbox"]');
+        dayCheckboxes.forEach(cb => cb.checked = false);
     }
 }
 
@@ -161,6 +181,8 @@ async function addActivity() {
         daylightOnly: daylightOnlyCheckbox.checked,
         startTime: startTimeSelect.value,
         endTime: endTimeSelect.value,
+        dayOfWeekDependent: dayOfWeekCheckbox ? dayOfWeekCheckbox.checked : false,
+        daysOfWeek: [],
         createdAt: new Date().toISOString(),
         enabled: true
     };
@@ -179,6 +201,18 @@ async function addActivity() {
         // Validate that at least one season is selected
         if (activity.seasons.length === 0) {
             showNotification('Please select at least one season', 'error');
+            return;
+        }
+    }
+    
+    // Collect day of week restrictions
+    if (activity.dayOfWeekDependent && dayOfWeekOptions) {
+        const dayCheckboxes = dayOfWeekOptions.querySelectorAll('input[type="checkbox"]:checked');
+        activity.daysOfWeek = Array.from(dayCheckboxes).map(cb => cb.value);
+        
+        // Validate that at least one day is selected
+        if (activity.daysOfWeek.length === 0) {
+            showNotification('Please select at least one day of the week', 'error');
             return;
         }
     }
@@ -250,13 +284,13 @@ function loadActivities() {
     
     activities.forEach((activity, index) => {
         const isAvailable = isActivityAvailable(activity, currentConditions);
-        const activityElement = createActivityElement(activity, index, isAvailable);
+        const activityElement = createActivityElement(activity, index, isAvailable, currentConditions);
         activitiesList.appendChild(activityElement);
     });
 }
 
 // Create activity element for the list
-function createActivityElement(activity, index, isAvailable) {
+function createActivityElement(activity, index, isAvailable, currentConditions) {
     const div = document.createElement('div');
     div.className = 'activity-item';
     
@@ -275,31 +309,74 @@ function createActivityElement(activity, index, isAvailable) {
     
     div.style.cssText = baseStyle + disabledStyle;
     
+    // Create tooltip for unavailable activities
+    let tooltipContent = '';
+    if (!isAvailable) {
+        tooltipContent = getUnavailabilityReason(activity, currentConditions);
+    }
+    
     div.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="flex: 1;">
                 <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
-                <div style="font-size: 10px; color: var(--fg-muted);">
+                <div class="activity-details" style="font-size: 10px; color: var(--fg-muted); display: none;">
                     ${getActivityDetails(activity)}
                 </div>
                 ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
                 <button class="edit-btn" style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 5px;" title="Edit">✎</button>
-                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px;" title="Delete">🗑</button>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑</button>
             </div>
         </div>
     `;
     
+    // Add tooltip for unavailable activities
+    if (!isAvailable && tooltipContent) {
+        div.setAttribute('data-tooltip', tooltipContent);
+    }
+    
     // Event listeners
-    div.addEventListener('mouseenter', () => {
+    div.addEventListener('mouseenter', (e) => {
         if (isAvailable) {
             div.style.backgroundColor = 'var(--button-active-bg)';
+        }
+        
+        // Show tooltip for unavailable activities
+        if (!isAvailable && tooltipContent) {
+            showTooltip(e, tooltipContent);
         }
     });
     
     div.addEventListener('mouseleave', () => {
         div.style.backgroundColor = 'var(--button-bg)';
+        hideTooltip();
+    });
+    
+    div.addEventListener('mousemove', (e) => {
+        if (!isAvailable && tooltipContent) {
+            updateTooltipPosition(e);
+        }
+    });
+    
+    // Click to show/hide details
+    div.addEventListener('click', (e) => {
+        if (e.target.classList.contains('edit-btn') || e.target.classList.contains('delete-btn')) {
+            return; // Don't toggle details if clicking buttons
+        }
+        
+        const detailsDiv = div.querySelector('.activity-details');
+        if (detailsDiv.style.display === 'none') {
+            detailsDiv.style.display = 'block';
+        } else {
+            detailsDiv.style.display = 'none';
+        }
+    });
+    
+    // Right-click context menu
+    div.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showContextMenu(e, activity);
     });
     
     // Edit button
@@ -309,8 +386,14 @@ function createActivityElement(activity, index, isAvailable) {
         editActivity(activity);
     });
     
-    // Delete button
+    // Delete button with hover effect
     const deleteBtn = div.querySelector('.delete-btn');
+    deleteBtn.addEventListener('mouseenter', () => {
+        deleteBtn.style.color = '#ff3333';
+    });
+    deleteBtn.addEventListener('mouseleave', () => {
+        deleteBtn.style.color = '#ff6b6b';
+    });
     deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteActivity(activity.id);
@@ -359,6 +442,15 @@ function isActivityAvailable(activity, conditions) {
         }
     }
     
+    // Day of week check
+    if (activity.dayOfWeekDependent && activity.daysOfWeek && activity.daysOfWeek.length > 0) {
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const currentDay = dayNames[conditions.currentTime.getDay()];
+        if (!activity.daysOfWeek.includes(currentDay)) {
+            return false;
+        }
+    }
+    
     // Time check
     if (activity.timeDependent) {
         if (activity.daylightOnly) {
@@ -381,6 +473,174 @@ function isActivityAvailable(activity, conditions) {
     }
     
     return true;
+}
+
+// Get reason why activity is unavailable
+function getUnavailabilityReason(activity, conditions) {
+    const reasons = [];
+    
+    // Weather check
+    if (activity.weatherDependent && activity.weatherRestrictions.length > 0) {
+        if (activity.weatherRestrictions.some(restriction => 
+            conditions.weather.toLowerCase().includes(restriction.toLowerCase()))) {
+            reasons.push(`Current weather: ${conditions.weather}`);
+        }
+    }
+    
+    // Season check
+    if (activity.seasonal && activity.seasons.length > 0) {
+        if (!activity.seasons.includes(conditions.season.toLowerCase())) {
+            reasons.push(`Wrong season (current: ${conditions.season})`);
+        }
+    }
+    
+    // Day of week check
+    if (activity.dayOfWeekDependent && activity.daysOfWeek && activity.daysOfWeek.length > 0) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const currentDay = dayNames[conditions.currentTime.getDay()];
+        if (!activity.daysOfWeek.includes(currentDay.toLowerCase())) {
+            reasons.push(`Wrong day (current: ${currentDay})`);
+        }
+    }
+    
+    // Time check
+    if (activity.timeDependent) {
+        if (activity.daylightOnly) {
+            const currentHour = conditions.currentTime.getHours();
+            if (currentHour < 6 || currentHour > 20) {
+                reasons.push('Outside daylight hours');
+            }
+        } else {
+            const currentHour = conditions.currentTime.getHours();
+            const startHour = parseInt(activity.startTime.split(':')[0]);
+            const endHour = parseInt(activity.endTime.split(':')[0]);
+            
+            if (currentHour < startHour || currentHour >= endHour) {
+                reasons.push(`Outside time range (${activity.startTime}-${activity.endTime})`);
+            }
+        }
+    }
+    
+    return reasons.length > 0 ? reasons.join(', ') : 'Currently unavailable';
+}
+
+// Show tooltip
+function showTooltip(event, text) {
+    hideTooltip(); // Hide any existing tooltip
+    
+    const tooltip = document.createElement('div');
+    tooltip.id = 'activity-tooltip';
+    tooltip.style.cssText = `
+        position: fixed;
+        background-color: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 11px;
+        max-width: 200px;
+        z-index: 1000;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    `;
+    tooltip.textContent = text;
+    
+    document.body.appendChild(tooltip);
+    updateTooltipPosition(event);
+}
+
+// Update tooltip position
+function updateTooltipPosition(event) {
+    const tooltip = document.getElementById('activity-tooltip');
+    if (tooltip) {
+        tooltip.style.left = (event.clientX + 10) + 'px';
+        tooltip.style.top = (event.clientY - 10) + 'px';
+    }
+}
+
+// Hide tooltip
+function hideTooltip() {
+    const tooltip = document.getElementById('activity-tooltip');
+    if (tooltip) {
+        tooltip.remove();
+    }
+}
+
+// Show context menu
+function showContextMenu(event, activity) {
+    hideContextMenu(); // Hide any existing context menu
+    
+    const contextMenu = document.createElement('div');
+    contextMenu.id = 'context-menu';
+    contextMenu.style.cssText = `
+        position: fixed;
+        background-color: var(--button-bg);
+        border: 1px solid var(--fg-muted);
+        border-radius: 4px;
+        padding: 5px 0;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+    
+    const editOption = document.createElement('div');
+    editOption.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        color: var(--fg-light);
+        font-size: 12px;
+        transition: background-color 0.2s ease;
+    `;
+    editOption.textContent = '✎ Edit';
+    editOption.addEventListener('mouseenter', () => {
+        editOption.style.backgroundColor = 'var(--button-active-bg)';
+    });
+    editOption.addEventListener('mouseleave', () => {
+        editOption.style.backgroundColor = 'transparent';
+    });
+    editOption.addEventListener('click', () => {
+        editActivity(activity);
+        hideContextMenu();
+    });
+    
+    const deleteOption = document.createElement('div');
+    deleteOption.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        color: #ff6b6b;
+        font-size: 12px;
+        transition: background-color 0.2s ease;
+    `;
+    deleteOption.textContent = '🗑 Delete';
+    deleteOption.addEventListener('mouseenter', () => {
+        deleteOption.style.backgroundColor = 'var(--button-active-bg)';
+    });
+    deleteOption.addEventListener('mouseleave', () => {
+        deleteOption.style.backgroundColor = 'transparent';
+    });
+    deleteOption.addEventListener('click', () => {
+        deleteActivity(activity.id);
+        hideContextMenu();
+    });
+    
+    contextMenu.appendChild(editOption);
+    contextMenu.appendChild(deleteOption);
+    document.body.appendChild(contextMenu);
+    
+    // Position the context menu
+    contextMenu.style.left = event.clientX + 'px';
+    contextMenu.style.top = event.clientY + 'px';
+    
+    // Close context menu when clicking elsewhere
+    setTimeout(() => {
+        document.addEventListener('click', hideContextMenu, { once: true });
+    }, 0);
+}
+
+// Hide context menu
+function hideContextMenu() {
+    const contextMenu = document.getElementById('context-menu');
+    if (contextMenu) {
+        contextMenu.remove();
+    }
 }
 
 // Get current conditions
@@ -542,11 +802,16 @@ function editActivity(activity) {
     startTimeSelect.value = activity.startTime;
     endTimeSelect.value = activity.endTime;
     
+    if (dayOfWeekCheckbox) {
+        dayOfWeekCheckbox.checked = activity.dayOfWeekDependent || false;
+    }
+    
     // Show/hide relevant sections
     toggleWeatherOptions();
     toggleSeasonalOptions();
     toggleTimeOptions();
     toggleDaylightOnly();
+    toggleDayOfWeekOptions();
     
     // Check weather restrictions
     if (activity.weatherDependent) {
@@ -560,6 +825,14 @@ function editActivity(activity) {
     if (activity.seasonal) {
         activity.seasons.forEach(season => {
             const checkbox = seasonalOptions.querySelector(`input[value="${season}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+    
+    // Check days of week
+    if (activity.dayOfWeekDependent && activity.daysOfWeek && dayOfWeekOptions) {
+        activity.daysOfWeek.forEach(day => {
+            const checkbox = dayOfWeekOptions.querySelector(`input[value="${day}"]`);
             if (checkbox) checkbox.checked = true;
         });
     }
@@ -595,10 +868,15 @@ function resetForm() {
     timeDependentCheckbox.checked = false;
     daylightOnlyCheckbox.checked = false;
     
+    if (dayOfWeekCheckbox) {
+        dayOfWeekCheckbox.checked = false;
+    }
+    
     // Hide all sub-options
     toggleWeatherOptions();
     toggleSeasonalOptions();
     toggleTimeOptions();
+    toggleDayOfWeekOptions();
     
     // Reset time selects
     startTimeSelect.value = '09:00';
