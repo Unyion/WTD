@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What To Do?</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top bar with weather -->
+    <div class="top-bar">
+        <div class="spacer"></div>
+        <div class="weather-display" id="weatherDisplay">
+            ☀️ Sunny, 85°
+        </div>
+    </div>
+
+    <!-- Main title -->
+    <div class="main-title">
+        <h1>What To Do?</h1>
+    </div>
+
+    <!-- Main action button -->
+    <div class="main-action">
+        <button class="wtd-button" id="tellMeWhatToDo">
+            Tell Me What To Do
+        </button>
+    </div>
+
+    <!-- Separator -->
+    <div class="separator"></div>
+
+    <!-- Two-column layout -->
+    <div class="content-container">
+        <!-- Left column - Saved Activities -->
+        <div class="left-column">
+            <h2>Saved Activities</h2>
+            <div class="activities-list" id="activitiesList">
+                <!-- Activities will be populated here -->
+            </div>
+        </div>
+
+        <!-- Right column - Add New Activity -->
+        <div class="right-column">
+            <div class="add-activity-section">
+                <h2>Add New Activity</h2>
+                
+                <!-- Activity name input -->
+                <div class="input-group">
+                    <input type="text" id="activityName" placeholder="Enter activity name..." class="activity-input">
+                </div>
+
+                <!-- Weather dependent section -->
+                <div class="option-section">
+                    <label class="main-checkbox">
+                        <input type="checkbox" id="weatherDependent">
+                        <span class="checkmark"></span>
+                        Weather Dependent
+                    </label>
+                    
+                    <div class="sub-options" id="weatherOptions" style="display: none;">
+                        <p class="instruction-text">Select any weather conditions that this activity cannot be done in</p>
+                        <div class="checkbox-group">
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="rain">
+                                <span class="checkmark"></span>
+                                Rain
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="storm">
+                                <span class="checkmark"></span>
+                                Storm
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="wind">
+                                <span class="checkmark"></span>
+                                High Wind
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="snow">
+                                <span class="checkmark"></span>
+                                Snow
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seasonal section -->
+                <div class="option-section">
+                    <label class="main-checkbox">
+                        <input type="checkbox" id="seasonal">
+                        <span class="checkmark"></span>
+                        Seasonal
+                    </label>
+                    
+                    <div class="sub-options" id="seasonalOptions" style="display: none;">
+                        <p class="instruction-text">Select the seasons when this activity should be available</p>
+                        <div class="checkbox-group">
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="spring">
+                                <span class="checkmark"></span>
+                                Spring
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="summer">
+                                <span class="checkmark"></span>
+                                Summer
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="fall">
+                                <span class="checkmark"></span>
+                                Fall
+                            </label>
+                            <label class="sub-checkbox">
+                                <input type="checkbox" value="winter">
+                                <span class="checkmark"></span>
+                                Winter
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time dependent section -->
+                <div class="option-section">
+                    <label class="main-checkbox">
+                        <input type="checkbox" id="timeDependent">
+                        <span class="checkmark"></span>
+                        Time Dependent
+                    </label>
+                    
+                    <div class="sub-options" id="timeOptions" style="display: none;">
+                        <p class="instruction-text">Set time constraints for this activity</p>
+                        
+                        <label class="sub-checkbox daylight-checkbox">
+                            <input type="checkbox" id="daylightOnly">
+                            <span class="checkmark"></span>
+                            Daylight Only (Sunrise to Sunset)
+                        </label>
+                        
+                        <div class="time-controls" id="timeControls">
+                            <div class="time-input-group">
+                                <label for="startTime">Start Time:</label>
+                                <select id="startTime" class="time-select">
+                                    <!-- Hours will be populated by JavaScript -->
+                                </select>
+                            </div>
+                            <div class="time-input-group">
+                                <label for="endTime">End Time:</label>
+                                <select id="endTime" class="time-select">
+                                    <!-- Hours will be populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add button -->
+                <button class="add-button" id="addActivity">
+                    Add Activity
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
