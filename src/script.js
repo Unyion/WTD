@@ -663,7 +663,7 @@ function hideContextMenu() {
     }
 }
 
-// Get current conditions
+// Get current conditions (updated to use actual weather data)
 function getCurrentConditions() {
     const now = new Date();
     const month = now.getMonth();
@@ -675,8 +675,20 @@ function getCurrentConditions() {
     else if (month >= 8 && month <= 10) season = 'fall';
     else season = 'winter';
     
+    // Extract current weather from display
+    const weatherText = weatherDisplay.textContent.toLowerCase();
+    let weather = 'clear'; // default to clear/sunny
+    
+    // Map weather conditions from API to our activity restrictions
+    if (weatherText.includes('rain') || weatherText.includes('drizzle')) weather = 'rain';
+    else if (weatherText.includes('storm') || weatherText.includes('thunderstorm')) weather = 'storm';
+    else if (weatherText.includes('wind') || weatherText.includes('squall')) weather = 'wind';
+    else if (weatherText.includes('snow')) weather = 'snow';
+    else if (weatherText.includes('cloud')) weather = 'cloudy';
+    else if (weatherText.includes('clear') || weatherText.includes('sunny')) weather = 'clear';
+    
     return {
-        weather: 'sunny', // TODO: Get from weather API
+        weather: weather,
         season: season,
         currentTime: now
     };
@@ -1166,54 +1178,93 @@ function closeEditModal() {
         overlay.remove();
     }
 }
+
 // Update weather display (updated version)
 async function updateWeather() {
+    console.log('updateWeather() called at:', new Date().toLocaleTimeString());
+    
     try {
-        // You'll need to get an API key from OpenWeatherMap
-        // For now, I'm using a placeholder API key - replace with your actual key
-        const API_KEY = 'YOUR_API_KEY_HERE'; // Replace with your OpenWeatherMap API key
-        const city = 'Fort Collins'; // Default location, can be made configurable later
+        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+        const city = 'Fort Collins,CO,US';
         
-        // For demonstration, I'll show how to implement it
-        // Uncomment and use your API key when ready:
-        /*
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=imperial`);
+        // Add cache busting parameter to ensure fresh data
+        const timestamp = Date.now();
+        const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+        
+        console.log('About to fetch weather from URL:', url);
+        
+        // Add explicit timeout and error handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(url, { 
+            signal: controller.signal,
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'WTD-App/1.0'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('Fetch completed successfully');
+        console.log('Weather API response status:', response.status);
+        console.log('Response ok:', response.ok);
         
         if (response.ok) {
+            console.log('Response is OK, parsing JSON...');
             const weatherData = await response.json();
+            console.log('Raw weather data received:', JSON.stringify(weatherData, null, 2));
+            
             const condition = weatherData.weather[0].main.toLowerCase();
+            const description = weatherData.weather[0].description;
             const temp = Math.round(weatherData.main.temp);
             const emoji = getWeatherEmoji(condition);
             
-            weatherDisplay.textContent = `${emoji} ${weatherData.weather[0].description}, ${temp}°F`;
+            console.log('Parsed weather info:');
+            console.log('- Condition:', condition);
+            console.log('- Description:', description);
+            console.log('- Temperature:', temp);
+            console.log('- Emoji:', emoji);
+            
+            // Capitalize first letter of description
+            const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
+            
+            const weatherText = `${emoji} ${capitalizedDescription}, ${temp}°F`;
+            weatherDisplay.textContent = weatherText;
+            
+            console.log('Weather display updated to:', weatherText);
+            console.log('Current time when updated:', new Date().toLocaleString());
             
             // Update activities list based on new weather
             loadActivities();
         } else {
-            throw new Error('Weather API request failed');
+            console.log('Response not OK, reading error...');
+            const errorText = await response.text();
+            console.error('Weather API error response:', errorText);
+            throw new Error(`Weather API request failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
-        */
-        
-        // Temporary simulation until you add your API key
-        const weatherConditions = [
-            { emoji: '☀️', condition: 'sunny', temp: 85 },
-            { emoji: '⛅', condition: 'partly cloudy', temp: 78 },
-            { emoji: '☁️', condition: 'cloudy', temp: 72 },
-            { emoji: '🌧️', condition: 'rain', temp: 65 },
-            { emoji: '⛈️', condition: 'storm', temp: 60 },
-            { emoji: '💨', condition: 'wind', temp: 70 },
-            { emoji: '❄️', condition: 'snow', temp: 32 }
-        ];
-        
-        const randomWeather = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
-        weatherDisplay.textContent = `${randomWeather.emoji} ${randomWeather.condition}, ${randomWeather.temp}°F`;
-        
-        // Update activities list based on simulated weather
-        loadActivities();
         
     } catch (error) {
-        console.error('Error updating weather:', error);
-        weatherDisplay.textContent = '☀️ Weather unavailable';
+        console.error('Error in updateWeather():', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Show specific error messages
+        if (error.name === 'AbortError') {
+            weatherDisplay.textContent = '⏱️ Weather request timed out';
+        } else if (error.message.includes('Failed to fetch')) {
+            weatherDisplay.textContent = '🌐 Cannot connect to weather service';
+        } else if (error.message.includes('API')) {
+            weatherDisplay.textContent = '❌ Weather API error';
+        } else {
+            weatherDisplay.textContent = '☀️ Weather unavailable';  
+        }
+        
+        // Still update activities list with default conditions
+        loadActivities();
     }
 }
 
@@ -1237,37 +1288,6 @@ function getWeatherEmoji(condition) {
     };
     
     return emojiMap[condition.toLowerCase()] || '☀️';
-}
-
-// Get current conditions (updated to use actual weather data)
-function getCurrentConditions() {
-    const now = new Date();
-    const month = now.getMonth();
-    
-    // Determine season based on month
-    let season;
-    if (month >= 2 && month <= 4) season = 'spring';
-    else if (month >= 5 && month <= 7) season = 'summer';
-    else if (month >= 8 && month <= 10) season = 'fall';
-    else season = 'winter';
-    
-    // Extract current weather from display
-    const weatherText = weatherDisplay.textContent.toLowerCase();
-    let weather = 'clear'; // default to clear/sunny
-    
-    // Map weather conditions from API to our activity restrictions
-    if (weatherText.includes('rain') || weatherText.includes('drizzle')) weather = 'rain';
-    else if (weatherText.includes('storm') || weatherText.includes('thunderstorm')) weather = 'storm';
-    else if (weatherText.includes('wind') || weatherText.includes('squall')) weather = 'wind';
-    else if (weatherText.includes('snow')) weather = 'snow';
-    else if (weatherText.includes('cloud')) weather = 'cloudy';
-    else if (weatherText.includes('clear') || weatherText.includes('sunny')) weather = 'clear';
-    
-    return {
-        weather: weather,
-        season: season,
-        currentTime: now
-    };
 }
 
 // Delete activity
@@ -1314,8 +1334,6 @@ function resetForm() {
     
     validateForm();
 }
-
-
 
 // Show notification
 function showNotification(message, type = 'info') {
