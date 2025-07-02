@@ -339,8 +339,8 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
                 ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
-                <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
-                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑</button>
+                <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✏️</button>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑️</button>
             </div>
         </div>
     `;
@@ -393,7 +393,7 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
         showContextMenu(e, activity);
     });
     
-    // Edit button with hover effect
+    // Edit button with hover effect (works even when activity is grayed out)
     const editBtn = div.querySelector('.edit-btn');
     editBtn.addEventListener('mouseenter', () => {
         editBtn.style.color = 'var(--accent)';
@@ -406,7 +406,7 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
         showEditModal(activity);
     });
     
-    // Delete button with hover effect
+    // Delete button with hover effect (works even when activity is grayed out)
     const deleteBtn = div.querySelector('.delete-btn');
     deleteBtn.addEventListener('mouseenter', () => {
         deleteBtn.style.color = '#ff3333';
@@ -977,6 +977,7 @@ function showEditModal(activity) {
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 12px;
+                transition: background-color 0.2s ease;
             ">Save Changes</button>
             <button id="cancelEditBtn" style="
                 background-color: var(--button-bg);
@@ -986,6 +987,7 @@ function showEditModal(activity) {
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 12px;
+                transition: background-color 0.2s ease;
             ">Cancel</button>
         </div>
     `;
@@ -1056,6 +1058,24 @@ function setupEditModalEventListeners(originalActivity) {
     // Save button
     document.getElementById('saveEditBtn').addEventListener('click', () => {
         saveEditedActivity(originalActivity);
+    });
+    
+    // Add hover effects for modal buttons
+    const saveBtn = document.getElementById('saveEditBtn');
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    
+    saveBtn.addEventListener('mouseenter', () => {
+        saveBtn.style.backgroundColor = '#2e7d32'; // Darker green
+    });
+    saveBtn.addEventListener('mouseleave', () => {
+        saveBtn.style.backgroundColor = 'var(--accent)';
+    });
+    
+    cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.backgroundColor = '#d32f2f'; // Red
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-bg)';
     });
     
     // Cancel button
@@ -1185,11 +1205,13 @@ async function updateWeather() {
     
     try {
         const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-        const city = 'Fort Collins,CO,US';
+        
+        // Get location from localStorage, default to Fort Collins
+        const savedLocation = localStorage.getItem('wtd-location') || 'Fort Collins,CO,US';
         
         // Add cache busting parameter to ensure fresh data
         const timestamp = Date.now();
-        const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+        const url = `https://api.openweathermap.org/data/2.5/weather?q=${savedLocation}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
         
         console.log('About to fetch weather from URL:', url);
         
@@ -1227,12 +1249,18 @@ async function updateWeather() {
             console.log('- Description:', description);
             console.log('- Temperature:', temp);
             console.log('- Emoji:', emoji);
+            console.log('- Location:', weatherData.name);
             
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
             
             const weatherText = `${emoji} ${capitalizedDescription}, ${temp}°F`;
             weatherDisplay.textContent = weatherText;
+            
+            // Store the actual location name returned by API
+            if (weatherData.name) {
+                localStorage.setItem('wtd-current-location', weatherData.name);
+            }
             
             console.log('Weather display updated to:', weatherText);
             console.log('Current time when updated:', new Date().toLocaleString());
@@ -1268,11 +1296,14 @@ async function updateWeather() {
     }
 }
 
-// Get weather emoji based on condition
-function getWeatherEmoji(condition) {
+// Get weather emoji based on condition and time of day
+function getWeatherEmoji(condition, isNightTime = false) {
+    const currentHour = new Date().getHours();
+    const actualIsNight = currentHour < 6 || currentHour > 20; // 8PM to 6AM is night
+    
     const emojiMap = {
-        'clear': '☀️',
-        'clouds': '☁️',
+        'clear': actualIsNight ? '🌙' : '☀️',  // Moon for night, sun for day
+        'clouds': actualIsNight ? '☁️' : '⛅',  // Keep clouds but could differentiate
         'rain': '🌧️',
         'drizzle': '🌦️',
         'thunderstorm': '⛈️',
@@ -1287,7 +1318,7 @@ function getWeatherEmoji(condition) {
         'tornado': '🌪️'
     };
     
-    return emojiMap[condition.toLowerCase()] || '☀️';
+    return emojiMap[condition.toLowerCase()] || (actualIsNight ? '🌙' : '☀️');
 }
 
 // Delete activity
