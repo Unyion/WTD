@@ -339,8 +339,8 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
                 ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
-                <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✏️</button>
-                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑️</button>
+                <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑</button>
             </div>
         </div>
     `;
@@ -1199,6 +1199,43 @@ function closeEditModal() {
     }
 }
 
+// Get user's location or use saved location
+async function getUserLocation() {
+    // First check if we have a saved location preference
+    const savedLocation = localStorage.getItem('wtd-location');
+    if (savedLocation && savedLocation !== 'auto') {
+        console.log('Using saved location:', savedLocation);
+        return savedLocation;
+    }
+    
+    // Try to get user's current location
+    return new Promise((resolve) => {
+        if (navigator.geolocation) {
+            console.log('Attempting to get user location...');
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    console.log('Got user coordinates:', lat, lon);
+                    resolve(`lat=${lat}&lon=${lon}`);
+                },
+                (error) => {
+                    console.log('Geolocation failed:', error.message);
+                    // Fall back to Fort Collins if geolocation fails
+                    resolve('Fort Collins,CO,US');
+                },
+                {
+                    timeout: 5000,
+                    enableHighAccuracy: false
+                }
+            );
+        } else {
+            console.log('Geolocation not supported');
+            resolve('Fort Collins,CO,US');
+        }
+    });
+}
+
 // Update weather display (updated version)
 async function updateWeather() {
     console.log('updateWeather() called at:', new Date().toLocaleTimeString());
@@ -1206,12 +1243,21 @@ async function updateWeather() {
     try {
         const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
         
-        // Get location from localStorage, default to Fort Collins
-        const savedLocation = localStorage.getItem('wtd-location') || 'Fort Collins,CO,US';
+        // Get user's location (auto-detect or saved preference)
+        const location = await getUserLocation();
+        console.log('Using location for weather:', location);
         
-        // Add cache busting parameter to ensure fresh data
+        // Build URL - different format for coordinates vs city name
+        let url;
         const timestamp = Date.now();
-        const url = `https://api.openweathermap.org/data/2.5/weather?q=${savedLocation}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+        
+        if (location.includes('lat=')) {
+            // Using coordinates
+            url = `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+        } else {
+            // Using city name
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+        }
         
         console.log('About to fetch weather from URL:', url);
         
@@ -1260,6 +1306,7 @@ async function updateWeather() {
             // Store the actual location name returned by API
             if (weatherData.name) {
                 localStorage.setItem('wtd-current-location', weatherData.name);
+                console.log('Stored current location as:', weatherData.name);
             }
             
             console.log('Weather display updated to:', weatherText);
