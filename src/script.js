@@ -18,10 +18,15 @@ const weatherDisplay = document.getElementById('weatherDisplay');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('App initialized at:', new Date().toLocaleTimeString());
     setupEventListeners();
     populateTimeOptions();
     loadActivities();
+    
+    // Force weather update immediately and log it
+    console.log('Forcing weather update...');
     updateWeather();
+    
     validateForm(); // Initial validation
 });
 
@@ -37,6 +42,15 @@ function setupEventListeners() {
     // Button clicks
     addActivityButton.addEventListener('click', addActivity);
     tellMeWhatToDoButton.addEventListener('click', suggestActivity);
+    
+    // Add click listener to weather display for manual refresh
+    weatherDisplay.addEventListener('click', () => {
+        console.log('Manual weather refresh requested');
+        weatherDisplay.textContent = '🔄 Refreshing...';
+        updateWeather();
+    });
+    weatherDisplay.style.cursor = 'pointer';
+    weatherDisplay.title = 'Click to refresh weather';
     
     // Input validation
     activityNameInput.addEventListener('input', validateForm);
@@ -1366,5 +1380,8 @@ function getSeasonFromDate(date) {
     return 'winter';
 }
 
-// Update weather every 5 minutes
-setInterval(updateWeather, 5 * 60 * 1000);
+// Update weather every 2 minutes for testing (change back to 5 minutes later)
+setInterval(() => {
+    console.log('Auto weather update triggered at:', new Date().toLocaleTimeString());
+    updateWeather();
+}, 2 * 60 * 1000);
