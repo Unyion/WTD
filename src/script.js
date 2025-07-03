@@ -158,14 +158,43 @@ function toggleDaylightOnly() {
 // Populate time dropdown options
 function populateTimeOptions() {
     const hours = [];
-    for (let i = 0; i < 24; i++) {
-        const hour = i.toString().padStart(2, '0') + ':00';
-        hours.push(hour);
+    const timeFormat = localStorage.getItem('wtd-time-format') || '24hr';
+    
+    if (timeFormat === '12hr') {
+        // 12-hour format
+        for (let i = 0; i < 24; i++) {
+            let displayHour = i;
+            let ampm = 'AM';
+            
+            if (i === 0) {
+                displayHour = 12;
+            } else if (i === 12) {
+                displayHour = 12;
+                ampm = 'PM';
+            } else if (i > 12) {
+                displayHour = i - 12;
+                ampm = 'PM';
+            }
+            
+            const value = i.toString().padStart(2, '0') + ':00';
+            const display = `${displayHour}:00 ${ampm}`;
+            hours.push({ value, display });
+        }
+    } else {
+        // 24-hour format
+        for (let i = 0; i < 24; i++) {
+            const time = i.toString().padStart(2, '0') + ':00';
+            hours.push({ value: time, display: time });
+        }
     }
     
+    // Clear existing options
+    startTimeSelect.innerHTML = '';
+    endTimeSelect.innerHTML = '';
+    
     hours.forEach(hour => {
-        const startOption = new Option(hour, hour);
-        const endOption = new Option(hour, hour);
+        const startOption = new Option(hour.display, hour.value);
+        const endOption = new Option(hour.display, hour.value);
         startTimeSelect.appendChild(startOption);
         endTimeSelect.appendChild(endOption);
     });
@@ -368,9 +397,9 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
             </div>
             <div style="display: flex; gap: 5px;">
                 <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
-                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: all 0.2s ease; position: relative;" title="Delete">
-                    <span class="delete-icon">🗑</span>
-                    <span class="delete-icon-hover" style="position: absolute; top: 0; left: 0; opacity: 0; filter: hue-rotate(0deg) brightness(1.5) saturate(2);">🗑</span>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: all 0.2s ease; position: relative; display: inline-block; width: 16px; height: 16px;" title="Delete">
+                    <span class="delete-icon" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">🗑</span>
+                    <span class="delete-icon-hover" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0; filter: hue-rotate(0deg) brightness(1.5) saturate(2);">🗑</span>
                 </button>
             </div>
         </div>
@@ -1251,6 +1280,19 @@ function showSettingsModal() {
     const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
     const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
     
+    // Get current time for examples
+    const now = new Date();
+    const hour12 = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+    });
+    const hour24 = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+    });
+    
     // Create modal content
     const modal = document.createElement('div');
     modal.style.cssText = `
@@ -1291,11 +1333,11 @@ function showSettingsModal() {
             <div style="display: flex; gap: 15px;">
                 <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
                     <input type="radio" name="timeFormat" value="12hr" ${currentTimeFormat === '12hr' ? 'checked' : ''} style="margin-right: 8px;">
-                    12-hour (3:00 PM)
+                    12-hour (${hour12})
                 </label>
                 <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
                     <input type="radio" name="timeFormat" value="24hr" ${currentTimeFormat === '24hr' ? 'checked' : ''} style="margin-right: 8px;">
-                    24-hour (15:00)
+                    24-hour (${hour24})
                 </label>
             </div>
         </div>
@@ -1418,11 +1460,22 @@ function saveSettings() {
     // Close modal
     closeSettingsModal();
     
+    // Refresh time options if format changed
+    populateTimeOptions();
+    
     // Refresh weather with new settings
     updateWeather();
     
     // Show success notification
     showNotification('Settings saved successfully!', 'success');
+}
+
+// Close edit modal
+function closeEditModal() {
+    const overlay = document.getElementById('edit-modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
 }
 
 // Close settings modal
@@ -1455,13 +1508,24 @@ async function getUserLocation() {
                 },
                 (error) => {
                     console.log('Geolocation failed:', error.message);
+                    console.log('Error code:', error.code);
+                    
+                    // More specific error handling
+                    if (error.code === 1) {
+                        console.log('Location permission denied by user');
+                    } else if (error.code === 2) {
+                        console.log('Location position unavailable (network issues)');
+                    } else if (error.code === 3) {
+                        console.log('Location request timed out');
+                    }
+                    
                     // Return null instead of fallback location
                     resolve(null);
                 },
                 {
-                    timeout: 10000,
+                    timeout: 15000, // Increased timeout
                     enableHighAccuracy: false,
-                    maximumAge: 300000 // 5 minutes
+                    maximumAge: 600000 // 10 minutes - longer cache to avoid repeated API calls
                 }
             );
         } else {
@@ -1620,6 +1684,20 @@ function updateTellMeWhatToDoButton(enabled) {
         tellMeWhatToDoButton.style.opacity = '0.5';
         tellMeWhatToDoButton.style.cursor = 'not-allowed';
         tellMeWhatToDoButton.title = 'Location not found! Click weather display to set location';
+        
+        // Create instant tooltip for disabled state
+        let tooltipTimeout;
+        
+        tellMeWhatToDoButton.addEventListener('mouseenter', () => {
+            if (tellMeWhatToDoButton.disabled) {
+                clearTimeout(tooltipTimeout);
+                showTooltip({ clientX: tellMeWhatToDoButton.getBoundingClientRect().left + 50, clientY: tellMeWhatToDoButton.getBoundingClientRect().top - 10 }, 'Location not found! Click weather display to set location');
+            }
+        });
+        
+        tellMeWhatToDoButton.addEventListener('mouseleave', () => {
+            hideTooltip();
+        });
     }
 }
 
