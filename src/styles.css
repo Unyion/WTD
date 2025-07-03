@@ -37,6 +37,21 @@ body {
     background-color: var(--bg-dark);
 }
 
+.settings-button {
+    color: var(--fg-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.settings-button:hover {
+    color: var(--fg-light);
+    background-color: var(--button-bg);
+}
+
 .spacer {
     flex: 1;
 }

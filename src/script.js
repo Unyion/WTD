@@ -15,6 +15,7 @@ const addActivityButton = document.getElementById('addActivity');
 const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
+const settingsButton = document.getElementById('settingsButton');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -43,14 +44,28 @@ function setupEventListeners() {
     addActivityButton.addEventListener('click', addActivity);
     tellMeWhatToDoButton.addEventListener('click', suggestActivity);
     
-    // Add click listener to weather display for manual refresh
+    // Add click listener to weather display for manual refresh or settings
     weatherDisplay.addEventListener('click', () => {
-        console.log('Manual weather refresh requested');
-        weatherDisplay.textContent = '🔄 Refreshing...';
-        updateWeather();
+        const weatherText = weatherDisplay.textContent;
+        if (weatherText.includes('Location not found') || weatherText.includes('Unable to get location')) {
+            console.log('Location not found - opening settings');
+            showSettingsModal();
+        } else {
+            console.log('Manual weather refresh requested');
+            weatherDisplay.textContent = '🔄 Refreshing...';
+            updateWeather();
+        }
     });
     weatherDisplay.style.cursor = 'pointer';
     weatherDisplay.title = 'Click to refresh weather';
+    
+    // Settings button click
+    if (settingsButton) {
+        settingsButton.addEventListener('click', () => {
+            console.log('Settings button clicked');
+            showSettingsModal();
+        });
+    }
     
     // Input validation
     activityNameInput.addEventListener('input', validateForm);
@@ -293,11 +308,24 @@ function loadActivities() {
         return;
     }
     
-    // Filter and display activities
+    // Filter and sort activities - available first, then unavailable
     const currentConditions = getCurrentConditions();
+    const availableActivities = [];
+    const unavailableActivities = [];
     
     activities.forEach((activity, index) => {
         const isAvailable = isActivityAvailable(activity, currentConditions);
+        if (isAvailable) {
+            availableActivities.push({ activity, index, isAvailable, currentConditions });
+        } else {
+            unavailableActivities.push({ activity, index, isAvailable, currentConditions });
+        }
+    });
+    
+    // Combine arrays - available first, then unavailable
+    const sortedActivities = [...availableActivities, ...unavailableActivities];
+    
+    sortedActivities.forEach(({ activity, index, isAvailable, currentConditions }) => {
         const activityElement = createActivityElement(activity, index, isAvailable, currentConditions);
         activitiesList.appendChild(activityElement);
     });
@@ -340,7 +368,10 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
             </div>
             <div style="display: flex; gap: 5px;">
                 <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
-                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Delete">🗑</button>
+                <button class="delete-btn" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 5px; transition: all 0.2s ease; position: relative;" title="Delete">
+                    <span class="delete-icon">🗑</span>
+                    <span class="delete-icon-hover" style="position: absolute; top: 0; left: 0; opacity: 0; filter: hue-rotate(0deg) brightness(1.5) saturate(2);">🗑</span>
+                </button>
             </div>
         </div>
     `;
@@ -408,11 +439,17 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     
     // Delete button with hover effect (works even when activity is grayed out)
     const deleteBtn = div.querySelector('.delete-btn');
+    const deleteIcon = deleteBtn.querySelector('.delete-icon');
+    const deleteIconHover = deleteBtn.querySelector('.delete-icon-hover');
+    
     deleteBtn.addEventListener('mouseenter', () => {
-        deleteBtn.style.color = '#ff3333';
+        deleteIcon.style.opacity = '0';
+        deleteIconHover.style.opacity = '1';
+        deleteIconHover.style.filter = 'hue-rotate(0deg) brightness(2) saturate(3) contrast(1.5)';
     });
     deleteBtn.addEventListener('mouseleave', () => {
-        deleteBtn.style.color = '#ff6b6b';
+        deleteIcon.style.opacity = '1';
+        deleteIconHover.style.opacity = '0';
     });
     deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1191,9 +1228,206 @@ function saveEditedActivity(originalActivity) {
     }
 }
 
-// Close edit modal
-function closeEditModal() {
-    const overlay = document.getElementById('edit-modal-overlay');
+// Show settings modal
+function showSettingsModal() {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'settings-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    // Get current settings
+    const currentLocation = localStorage.getItem('wtd-location') || '';
+    const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
+    const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 500px;
+        color: var(--fg-light);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    `;
+    
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 18px; text-align: center;">Settings</h2>
+        
+        <!-- Location Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
+            <input type="text" id="settingsLocation" placeholder="e.g. Denver,CO,US or leave blank for auto-detect" style="
+                width: 100%;
+                background-color: var(--input-bg);
+                color: var(--fg-light);
+                border: 1px solid var(--button-bg);
+                padding: 8px 12px;
+                font-size: 12px;
+                border-radius: 3px;
+                outline: none;
+                margin-bottom: 5px;
+            " value="${currentLocation}">
+            <div style="font-size: 10px; color: var(--fg-muted); font-style: italic;">
+                Leave blank to auto-detect your location. Use format: City,State,Country
+            </div>
+        </div>
+
+        <!-- Time Format Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Time Format:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="timeFormat" value="12hr" ${currentTimeFormat === '12hr' ? 'checked' : ''} style="margin-right: 8px;">
+                    12-hour (3:00 PM)
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="timeFormat" value="24hr" ${currentTimeFormat === '24hr' ? 'checked' : ''} style="margin-right: 8px;">
+                    24-hour (15:00)
+                </label>
+            </div>
+        </div>
+
+        <!-- Temperature Unit Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Temperature Unit:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="tempUnit" value="F" ${currentTempUnit === 'F' ? 'checked' : ''} style="margin-right: 8px;">
+                    Fahrenheit (°F)
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="tempUnit" value="C" ${currentTempUnit === 'C' ? 'checked' : ''} style="margin-right: 8px;">
+                    Celsius (°C)
+                </label>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
+            <button id="saveSettingsBtn" style="
+                background-color: var(--accent);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Save Settings</button>
+            <button id="cancelSettingsBtn" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Setup event listeners for the settings modal
+    setupSettingsModalEventListeners();
+    
+    // Focus on the location input
+    document.getElementById('settingsLocation').focus();
+}
+
+// Setup event listeners for settings modal
+function setupSettingsModalEventListeners() {
+    const saveBtn = document.getElementById('saveSettingsBtn');
+    const cancelBtn = document.getElementById('cancelSettingsBtn');
+    
+    // Add hover effects for modal buttons
+    saveBtn.addEventListener('mouseenter', () => {
+        saveBtn.style.backgroundColor = '#2e7d32'; // Darker green
+    });
+    saveBtn.addEventListener('mouseleave', () => {
+        saveBtn.style.backgroundColor = 'var(--accent)';
+    });
+    
+    cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.backgroundColor = '#d32f2f'; // Red
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-bg)';
+    });
+    
+    // Save button
+    saveBtn.addEventListener('click', () => {
+        saveSettings();
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', () => {
+        closeSettingsModal();
+    });
+    
+    // Close on overlay click
+    document.getElementById('settings-modal-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'settings-modal-overlay') {
+            closeSettingsModal();
+        }
+    });
+    
+    // Close on escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeSettingsModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Save settings
+function saveSettings() {
+    const location = document.getElementById('settingsLocation').value.trim();
+    const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
+    const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
+    
+    // Save to localStorage
+    if (location) {
+        localStorage.setItem('wtd-location', location);
+    } else {
+        localStorage.removeItem('wtd-location'); // Remove to trigger auto-detect
+    }
+    
+    localStorage.setItem('wtd-time-format', timeFormat);
+    localStorage.setItem('wtd-temp-unit', tempUnit);
+    
+    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit });
+    
+    // Close modal
+    closeSettingsModal();
+    
+    // Refresh weather with new settings
+    updateWeather();
+    
+    // Show success notification
+    showNotification('Settings saved successfully!', 'success');
+}
+
+// Close settings modal
+function closeSettingsModal() {
+    const overlay = document.getElementById('settings-modal-overlay');
     if (overlay) {
         overlay.remove();
     }
@@ -1221,17 +1455,18 @@ async function getUserLocation() {
                 },
                 (error) => {
                     console.log('Geolocation failed:', error.message);
-                    // Fall back to Fort Collins if geolocation fails
-                    resolve('Fort Collins,CO,US');
+                    // Return null instead of fallback location
+                    resolve(null);
                 },
                 {
-                    timeout: 5000,
-                    enableHighAccuracy: false
+                    timeout: 10000,
+                    enableHighAccuracy: false,
+                    maximumAge: 300000 // 5 minutes
                 }
             );
         } else {
             console.log('Geolocation not supported');
-            resolve('Fort Collins,CO,US');
+            resolve(null);
         }
     });
 }
@@ -1245,18 +1480,34 @@ async function updateWeather() {
         
         // Get user's location (auto-detect or saved preference)
         const location = await getUserLocation();
+        
+        if (!location) {
+            // No location available - show error message
+            weatherDisplay.textContent = '📍 Location not found - Click to set';
+            weatherDisplay.style.cursor = 'pointer';
+            weatherDisplay.style.color = '#ff9800'; // Orange warning color
+            
+            // Disable "Tell Me What To Do" button
+            updateTellMeWhatToDoButton(false);
+            
+            // Don't try to load activities without location
+            return;
+        }
+        
         console.log('Using location for weather:', location);
         
         // Build URL - different format for coordinates vs city name
         let url;
         const timestamp = Date.now();
+        const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+        const units = tempUnit === 'F' ? 'imperial' : 'metric';
         
         if (location.includes('lat=')) {
             // Using coordinates
-            url = `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+            url = `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
         } else {
             // Using city name
-            url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${API_KEY}&units=imperial&_=${timestamp}`;
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
         }
         
         console.log('About to fetch weather from URL:', url);
@@ -1290,6 +1541,10 @@ async function updateWeather() {
             const temp = Math.round(weatherData.main.temp);
             const emoji = getWeatherEmoji(condition);
             
+            // Get temperature unit preference
+            const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+            const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
+            
             console.log('Parsed weather info:');
             console.log('- Condition:', condition);
             console.log('- Description:', description);
@@ -1300,8 +1555,13 @@ async function updateWeather() {
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
             
-            const weatherText = `${emoji} ${capitalizedDescription}, ${temp}°F`;
+            const weatherText = `${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
             weatherDisplay.textContent = weatherText;
+            weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
+            weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
+            
+            // Enable "Tell Me What To Do" button
+            updateTellMeWhatToDoButton(true);
             
             // Store the actual location name returned by API
             if (weatherData.name) {
@@ -1338,8 +1598,28 @@ async function updateWeather() {
             weatherDisplay.textContent = '☀️ Weather unavailable';  
         }
         
-        // Still update activities list with default conditions
+        weatherDisplay.style.color = '#ff6b6b'; // Red error color
+        
+        // Disable "Tell Me What To Do" button on error
+        updateTellMeWhatToDoButton(false);
+        
+        // Still try to load activities with default conditions
         loadActivities();
+    }
+}
+
+// Update the "Tell Me What To Do" button state
+function updateTellMeWhatToDoButton(enabled) {
+    if (enabled) {
+        tellMeWhatToDoButton.disabled = false;
+        tellMeWhatToDoButton.style.opacity = '1';
+        tellMeWhatToDoButton.style.cursor = 'pointer';
+        tellMeWhatToDoButton.title = 'Get a random activity suggestion';
+    } else {
+        tellMeWhatToDoButton.disabled = true;
+        tellMeWhatToDoButton.style.opacity = '0.5';
+        tellMeWhatToDoButton.style.cursor = 'not-allowed';
+        tellMeWhatToDoButton.title = 'Location not found! Click weather display to set location';
     }
 }
 
