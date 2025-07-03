@@ -229,11 +229,15 @@ body {
     transition: background-color 0.2s ease;
 }
 
-.main-checkbox:focus-within,
-.sub-checkbox:focus-within {
-    background-color: var(--button-bg);
+.main-checkbox input[type="checkbox"]:focus-visible + .checkmark,
+.sub-checkbox input[type="checkbox"]:focus-visible + .checkmark {
     outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline-offset: 2px;
+}
+
+.main-checkbox:has(input[type="checkbox"]:focus-visible),
+.sub-checkbox:has(input[type="checkbox"]:focus-visible) {
+    background-color: var(--button-bg);
 }
 
 .main-checkbox input[type="checkbox"],
