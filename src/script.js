@@ -643,11 +643,25 @@ function isActivityAvailable(activity, conditions) {
     // Time check
     if (activity.timeDependent) {
         if (activity.daylightOnly) {
-            // Check if current time is between sunrise and 1 hour before sunset
-            // Using simplified 6am-7pm as effective daylight hours (sunset at 8pm)
-            const currentHour = conditions.currentTime.getHours();
-            if (currentHour < 6 || currentHour >= 19) { // Stop at 7pm instead of 8pm
-                return false;
+            // Use actual sunrise/sunset times if available
+            if (window.sunriseTime && window.sunsetTime) {
+                const now = conditions.currentTime;
+                const currentTime = now.getTime();
+                const sunriseTime = window.sunriseTime.getTime();
+                const sunsetTime = window.sunsetTime.getTime();
+                
+                // Stop daylight activities 1 hour before sunset to allow completion
+                const effectiveSunsetTime = sunsetTime - (60 * 60 * 1000); // 1 hour before sunset
+                
+                if (currentTime < sunriseTime || currentTime >= effectiveSunsetTime) {
+                    return false;
+                }
+            } else {
+                // Fallback to hardcoded times if sunrise/sunset not available
+                const currentHour = conditions.currentTime.getHours();
+                if (currentHour < 6 || currentHour >= 19) {
+                    return false;
+                }
             }
         } else {
             // Check custom time range
@@ -695,9 +709,27 @@ function getUnavailabilityReason(activity, conditions) {
     // Time check
     if (activity.timeDependent) {
         if (activity.daylightOnly) {
-            const currentHour = conditions.currentTime.getHours();
-            if (currentHour < 6 || currentHour >= 19) { // Stop at 7pm for daylight activities
-                reasons.push('Outside daylight hours (need time to complete before dark)');
+            // Use actual sunrise/sunset times if available
+            if (window.sunriseTime && window.sunsetTime) {
+                const now = conditions.currentTime;
+                const currentTime = now.getTime();
+                const sunriseTime = window.sunriseTime.getTime();
+                const sunsetTime = window.sunsetTime.getTime();
+                
+                // Stop daylight activities 1 hour before sunset
+                const effectiveSunsetTime = sunsetTime - (60 * 60 * 1000);
+                
+                if (currentTime < sunriseTime || currentTime >= effectiveSunsetTime) {
+                    const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    const effectiveSunsetStr = new Date(effectiveSunsetTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr}, need time to complete before dark)`);
+                }
+            } else {
+                // Fallback message when sunrise/sunset not available
+                const currentHour = conditions.currentTime.getHours();
+                if (currentHour < 6 || currentHour >= 19) {
+                    reasons.push('Outside daylight hours (need time to complete before dark)');
+                }
             }
         } else {
             const currentHour = conditions.currentTime.getHours();
@@ -1785,6 +1817,14 @@ async function updateWeather() {
             const temp = Math.round(weatherData.main.temp);
             const emoji = getWeatherEmoji(condition);
             
+            // Get sunrise and sunset times
+            const sunrise = new Date(weatherData.sys.sunrise * 1000);
+            const sunset = new Date(weatherData.sys.sunset * 1000);
+            
+            // Store sunrise/sunset times globally for daylight checks
+            window.sunriseTime = sunrise;
+            window.sunsetTime = sunset;
+            
             // Get temperature unit preference
             const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
             const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
@@ -1795,6 +1835,8 @@ async function updateWeather() {
             console.log('- Temperature:', temp);
             console.log('- Emoji:', emoji);
             console.log('- Location:', weatherData.name);
+            console.log('- Sunrise:', sunrise.toLocaleTimeString());
+            console.log('- Sunset:', sunset.toLocaleTimeString());
             
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
