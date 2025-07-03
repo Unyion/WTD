@@ -337,35 +337,26 @@ function loadActivities() {
         return;
     }
     
-    // Check if user has manually reordered activities
-    const hasCustomOrder = localStorage.getItem('wtd-has-custom-order') === 'true';
+    // Separate available and unavailable activities, then sort alphabetically
+    const currentConditions = getCurrentConditions();
+    const availableActivities = [];
+    const unavailableActivities = [];
     
-    let sortedActivities;
-    if (hasCustomOrder) {
-        // Preserve user's custom order
-        const currentConditions = getCurrentConditions();
-        sortedActivities = activities.map((activity, index) => {
-            const isAvailable = isActivityAvailable(activity, currentConditions);
-            return { activity, index, isAvailable, currentConditions };
-        });
-    } else {
-        // Default sorting - available first, then unavailable
-        const currentConditions = getCurrentConditions();
-        const availableActivities = [];
-        const unavailableActivities = [];
-        
-        activities.forEach((activity, index) => {
-            const isAvailable = isActivityAvailable(activity, currentConditions);
-            if (isAvailable) {
-                availableActivities.push({ activity, index, isAvailable, currentConditions });
-            } else {
-                unavailableActivities.push({ activity, index, isAvailable, currentConditions });
-            }
-        });
-        
-        // Combine arrays - available first, then unavailable
-        sortedActivities = [...availableActivities, ...unavailableActivities];
-    }
+    activities.forEach((activity, index) => {
+        const isAvailable = isActivityAvailable(activity, currentConditions);
+        if (isAvailable) {
+            availableActivities.push({ activity, index, isAvailable, currentConditions });
+        } else {
+            unavailableActivities.push({ activity, index, isAvailable, currentConditions });
+        }
+    });
+    
+    // Sort both groups alphabetically by activity name
+    availableActivities.sort((a, b) => a.activity.name.toLowerCase().localeCompare(b.activity.name.toLowerCase()));
+    unavailableActivities.sort((a, b) => a.activity.name.toLowerCase().localeCompare(b.activity.name.toLowerCase()));
+    
+    // Combine arrays - available first (alphabetical), then unavailable (alphabetical)
+    const sortedActivities = [...availableActivities, ...unavailableActivities];
     
     sortedActivities.forEach(({ activity, index, isAvailable, currentConditions }) => {
         const activityElement = createActivityElement(activity, index, isAvailable, currentConditions);
@@ -377,8 +368,6 @@ function loadActivities() {
 function createActivityElement(activity, index, isAvailable, currentConditions) {
     const div = document.createElement('div');
     div.className = 'activity-item';
-    div.draggable = true; // Make draggable
-    div.dataset.activityId = activity.id; // Store activity ID for drag/drop
     
     const baseStyle = `
         background-color: var(--button-bg);
@@ -403,15 +392,12 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     
     div.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1; display: flex; align-items: center;">
-                <span style="color: var(--fg-muted); margin-right: 8px; cursor: grab;">⋮⋮</span>
-                <div style="flex: 1;">
-                    <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
-                    <div class="activity-details" style="font-size: 10px; color: var(--fg-muted); display: none;">
-                        ${getActivityDetails(activity)}
-                    </div>
-                    ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
+            <div style="flex: 1;">
+                <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
+                <div class="activity-details" style="font-size: 10px; color: var(--fg-muted); display: none;">
+                    ${getActivityDetails(activity)}
                 </div>
+                ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
                 <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
@@ -422,9 +408,6 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
             </div>
         </div>
     `;
-    
-    // Add drag and drop event listeners
-    setupDragAndDrop(div);
     
     // Add tooltip for unavailable activities
     if (!isAvailable && tooltipContent) {
@@ -660,10 +643,10 @@ function isActivityAvailable(activity, conditions) {
     // Time check
     if (activity.timeDependent) {
         if (activity.daylightOnly) {
-            // Check if current time is between sunrise and sunset
-            // For now, using simplified 6am-8pm as daylight hours
+            // Check if current time is between sunrise and 1 hour before sunset
+            // Using simplified 6am-7pm as effective daylight hours (sunset at 8pm)
             const currentHour = conditions.currentTime.getHours();
-            if (currentHour < 6 || currentHour > 20) {
+            if (currentHour < 6 || currentHour >= 19) { // Stop at 7pm instead of 8pm
                 return false;
             }
         } else {
@@ -713,8 +696,8 @@ function getUnavailabilityReason(activity, conditions) {
     if (activity.timeDependent) {
         if (activity.daylightOnly) {
             const currentHour = conditions.currentTime.getHours();
-            if (currentHour < 6 || currentHour > 20) {
-                reasons.push('Outside daylight hours');
+            if (currentHour < 6 || currentHour >= 19) { // Stop at 7pm for daylight activities
+                reasons.push('Outside daylight hours (need time to complete before dark)');
             }
         } else {
             const currentHour = conditions.currentTime.getHours();
