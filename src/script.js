@@ -832,6 +832,7 @@ function showActivitySuggestion(activity) {
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 12px;
+                transition: background-color 0.2s ease;
             ">Perfect!</button>
             <button id="newSuggestion" style="
                 background-color: var(--button-bg);
@@ -841,6 +842,7 @@ function showActivitySuggestion(activity) {
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 12px;
+                transition: background-color 0.2s ease;
             ">Suggest Another</button>
             <button id="closeSuggestion" style="
                 background-color: #666;
@@ -850,6 +852,7 @@ function showActivitySuggestion(activity) {
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 12px;
+                transition: background-color 0.2s ease;
             ">Close</button>
         </div>
     `;
@@ -858,17 +861,43 @@ function showActivitySuggestion(activity) {
     document.body.appendChild(overlay);
     
     // Event listeners for modal buttons
-    document.getElementById('acceptSuggestion').addEventListener('click', () => {
+    const acceptBtn = document.getElementById('acceptSuggestion');
+    const newBtn = document.getElementById('newSuggestion');
+    const closeBtn = document.getElementById('closeSuggestion');
+    
+    // Add hover effects
+    acceptBtn.addEventListener('mouseenter', () => {
+        acceptBtn.style.backgroundColor = '#2e7d32'; // Darker green
+    });
+    acceptBtn.addEventListener('mouseleave', () => {
+        acceptBtn.style.backgroundColor = 'var(--accent)';
+    });
+    
+    newBtn.addEventListener('mouseenter', () => {
+        newBtn.style.backgroundColor = 'var(--button-active-bg)';
+    });
+    newBtn.addEventListener('mouseleave', () => {
+        newBtn.style.backgroundColor = 'var(--button-bg)';
+    });
+    
+    closeBtn.addEventListener('mouseenter', () => {
+        closeBtn.style.backgroundColor = '#d32f2f'; // Red
+    });
+    closeBtn.addEventListener('mouseleave', () => {
+        closeBtn.style.backgroundColor = '#666';
+    });
+    
+    acceptBtn.addEventListener('click', () => {
         document.body.removeChild(overlay);
         showNotification(`Great choice! Enjoy your ${activity.name}!`, 'success');
     });
     
-    document.getElementById('newSuggestion').addEventListener('click', () => {
+    newBtn.addEventListener('click', () => {
         document.body.removeChild(overlay);
         suggestActivity();
     });
     
-    document.getElementById('closeSuggestion').addEventListener('click', () => {
+    closeBtn.addEventListener('click', () => {
         document.body.removeChild(overlay);
     });
     
@@ -946,7 +975,7 @@ function showEditModal(activity) {
             </label>
             
             <div id="editWeatherOptions" style="margin-left: 26px; ${activity.weatherDependent ? '' : 'display: none;'}">
-                <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Select weather conditions that prevent this activity</p>
+                <p style="color: var(--fg-muted); font-size: 10px; font-style: italic; margin-bottom: 10px;">Select weather conditions that this activity <span style="color: #ff6b6b; font-weight: bold; font-size: 11px;">cannot</span> be done in</p>
                 <div style="display: flex; flex-direction: column; gap: 5px;">
                     ${['rain', 'storm', 'wind', 'snow'].map(condition => `
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
@@ -1065,7 +1094,19 @@ function showEditModal(activity) {
     setupEditModalEventListeners(activity);
     
     // Focus on the name input
-    document.getElementById('editActivityName').focus();
+    const nameInput = document.getElementById('editActivityName');
+    nameInput.focus();
+    
+    // Add enter key listener for save
+    const handleEditEnterKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveEditedActivity(activity);
+        }
+    };
+    
+    // Add enter key listener to all inputs in the modal
+    modal.addEventListener('keydown', handleEditEnterKey);
 }
 
 // Setup event listeners for edit modal
@@ -1389,7 +1430,19 @@ function showSettingsModal() {
     setupSettingsModalEventListeners();
     
     // Focus on the location input
-    document.getElementById('settingsLocation').focus();
+    const locationInput = document.getElementById('settingsLocation');
+    locationInput.focus();
+    
+    // Add enter key listener for save
+    const handleSettingsEnterKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveSettings();
+        }
+    };
+    
+    // Add enter key listener to all inputs in the modal
+    modal.addEventListener('keydown', handleSettingsEnterKey);
 }
 
 // Setup event listeners for settings modal
@@ -1495,6 +1548,17 @@ async function getUserLocation() {
         return savedLocation;
     }
     
+    // Check if we have a recent cached location to avoid repeated API calls
+    const cachedLocation = localStorage.getItem('wtd-cached-location');
+    const cacheTimestamp = localStorage.getItem('wtd-cache-timestamp');
+    const now = Date.now();
+    
+    // Use cached location if less than 30 minutes old
+    if (cachedLocation && cacheTimestamp && (now - parseInt(cacheTimestamp)) < 30 * 60 * 1000) {
+        console.log('Using cached location:', cachedLocation);
+        return cachedLocation;
+    }
+    
     // Try to get user's current location
     return new Promise((resolve) => {
         if (navigator.geolocation) {
@@ -1503,8 +1567,14 @@ async function getUserLocation() {
                 (position) => {
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
+                    const locationString = `lat=${lat}&lon=${lon}`;
                     console.log('Got user coordinates:', lat, lon);
-                    resolve(`lat=${lat}&lon=${lon}`);
+                    
+                    // Cache the location to avoid repeated calls
+                    localStorage.setItem('wtd-cached-location', locationString);
+                    localStorage.setItem('wtd-cache-timestamp', now.toString());
+                    
+                    resolve(locationString);
                 },
                 (error) => {
                     console.log('Geolocation failed:', error.message);
@@ -1523,9 +1593,9 @@ async function getUserLocation() {
                     resolve(null);
                 },
                 {
-                    timeout: 15000, // Increased timeout
+                    timeout: 20000, // Increased timeout even more
                     enableHighAccuracy: false,
-                    maximumAge: 600000 // 10 minutes - longer cache to avoid repeated API calls
+                    maximumAge: 1800000 // 30 minutes - much longer cache
                 }
             );
         } else {
@@ -1792,7 +1862,7 @@ function showNotification(message, type = 'info') {
     
     notification.style.cssText = `
         position: fixed;
-        top: 20px;
+        top: 50px;
         right: 20px;
         background-color: ${colors[type] || colors.info};
         color: white;

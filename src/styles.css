@@ -89,6 +89,9 @@ body {
     cursor: pointer;
     border-radius: 3px;
     transition: background-color 0.2s ease;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-weight: bold;
+    letter-spacing: 0.5px;
 }
 
 .wtd-button:hover {
