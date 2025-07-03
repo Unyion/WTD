@@ -224,6 +224,16 @@ body {
     margin-bottom: 8px;
     font-size: 12px;
     position: relative;
+    padding: 4px;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+}
+
+.main-checkbox:focus-within,
+.sub-checkbox:focus-within {
+    background-color: var(--button-bg);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 .main-checkbox input[type="checkbox"],
@@ -231,6 +241,11 @@ body {
     opacity: 0;
     position: absolute;
     cursor: pointer;
+}
+
+.main-checkbox input[type="checkbox"]:focus,
+.sub-checkbox input[type="checkbox"]:focus {
+    outline: none;
 }
 
 .checkmark {
