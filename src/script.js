@@ -337,22 +337,35 @@ function loadActivities() {
         return;
     }
     
-    // Filter and sort activities - available first, then unavailable
-    const currentConditions = getCurrentConditions();
-    const availableActivities = [];
-    const unavailableActivities = [];
+    // Check if user has manually reordered activities
+    const hasCustomOrder = localStorage.getItem('wtd-has-custom-order') === 'true';
     
-    activities.forEach((activity, index) => {
-        const isAvailable = isActivityAvailable(activity, currentConditions);
-        if (isAvailable) {
-            availableActivities.push({ activity, index, isAvailable, currentConditions });
-        } else {
-            unavailableActivities.push({ activity, index, isAvailable, currentConditions });
-        }
-    });
-    
-    // Combine arrays - available first, then unavailable
-    const sortedActivities = [...availableActivities, ...unavailableActivities];
+    let sortedActivities;
+    if (hasCustomOrder) {
+        // Preserve user's custom order
+        const currentConditions = getCurrentConditions();
+        sortedActivities = activities.map((activity, index) => {
+            const isAvailable = isActivityAvailable(activity, currentConditions);
+            return { activity, index, isAvailable, currentConditions };
+        });
+    } else {
+        // Default sorting - available first, then unavailable
+        const currentConditions = getCurrentConditions();
+        const availableActivities = [];
+        const unavailableActivities = [];
+        
+        activities.forEach((activity, index) => {
+            const isAvailable = isActivityAvailable(activity, currentConditions);
+            if (isAvailable) {
+                availableActivities.push({ activity, index, isAvailable, currentConditions });
+            } else {
+                unavailableActivities.push({ activity, index, isAvailable, currentConditions });
+            }
+        });
+        
+        // Combine arrays - available first, then unavailable
+        sortedActivities = [...availableActivities, ...unavailableActivities];
+    }
     
     sortedActivities.forEach(({ activity, index, isAvailable, currentConditions }) => {
         const activityElement = createActivityElement(activity, index, isAvailable, currentConditions);
@@ -364,6 +377,8 @@ function loadActivities() {
 function createActivityElement(activity, index, isAvailable, currentConditions) {
     const div = document.createElement('div');
     div.className = 'activity-item';
+    div.draggable = true; // Make draggable
+    div.dataset.activityId = activity.id; // Store activity ID for drag/drop
     
     const baseStyle = `
         background-color: var(--button-bg);
@@ -388,12 +403,15 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     
     div.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-                <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
-                <div class="activity-details" style="font-size: 10px; color: var(--fg-muted); display: none;">
-                    ${getActivityDetails(activity)}
+            <div style="flex: 1; display: flex; align-items: center;">
+                <span style="color: var(--fg-muted); margin-right: 8px; cursor: grab;">⋮⋮</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: bold; margin-bottom: 5px; ${isAvailable ? '' : 'color: var(--fg-muted);'}">${activity.name}</div>
+                    <div class="activity-details" style="font-size: 10px; color: var(--fg-muted); display: none;">
+                        ${getActivityDetails(activity)}
+                    </div>
+                    ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
                 </div>
-                ${!isAvailable ? '<div style="font-size: 9px; color: #ff6b6b; margin-top: 3px;">Currently unavailable</div>' : ''}
             </div>
             <div style="display: flex; gap: 5px;">
                 <button class="edit-btn" style="background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; transition: color 0.2s ease;" title="Edit">✎</button>
@@ -404,6 +422,9 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
             </div>
         </div>
     `;
+    
+    // Add drag and drop event listeners
+    setupDragAndDrop(div);
     
     // Add tooltip for unavailable activities
     if (!isAvailable && tooltipContent) {
@@ -488,7 +509,106 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     return div;
 }
 
-// Get activity details for display
+// Setup drag and drop functionality
+function setupDragAndDrop(element) {
+    let draggedElement = null;
+    
+    element.addEventListener('dragstart', (e) => {
+        draggedElement = element;
+        element.style.opacity = '0.5';
+        element.style.transform = 'rotate(2deg)';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', element.outerHTML);
+    });
+    
+    element.addEventListener('dragend', (e) => {
+        element.style.opacity = '1';
+        element.style.transform = 'none';
+        draggedElement = null;
+    });
+    
+    element.addEventListener('dragover', (e) => {
+        if (draggedElement && draggedElement !== element) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Visual feedback
+            const rect = element.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            
+            if (e.clientY < midY) {
+                element.style.borderTop = '3px solid var(--accent)';
+                element.style.borderBottom = 'none';
+            } else {
+                element.style.borderBottom = '3px solid var(--accent)';
+                element.style.borderTop = 'none';
+            }
+        }
+    });
+    
+    element.addEventListener('dragleave', (e) => {
+        element.style.borderTop = 'none';
+        element.style.borderBottom = 'none';
+    });
+    
+    element.addEventListener('drop', (e) => {
+        e.preventDefault();
+        element.style.borderTop = 'none';
+        element.style.borderBottom = 'none';
+        
+        if (draggedElement && draggedElement !== element) {
+            // Determine drop position
+            const rect = element.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            const insertBefore = e.clientY < midY;
+            
+            // Get activity IDs
+            const draggedId = draggedElement.dataset.activityId;
+            const targetId = element.dataset.activityId;
+            
+            // Reorder activities in storage
+            reorderActivities(draggedId, targetId, insertBefore);
+            
+            // Refresh the activities list
+            loadActivities();
+            
+            showNotification('Activities reordered!', 'success');
+        }
+    });
+}
+
+// Reorder activities in localStorage
+function reorderActivities(draggedId, targetId, insertBefore) {
+    let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+    
+    // Find the dragged activity
+    const draggedIndex = activities.findIndex(a => a.id === draggedId);
+    const targetIndex = activities.findIndex(a => a.id === targetId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Remove the dragged activity
+    const draggedActivity = activities.splice(draggedIndex, 1)[0];
+    
+    // Calculate new insertion index
+    let newIndex = targetIndex;
+    if (draggedIndex < targetIndex) {
+        newIndex--; // Adjust for removed element
+    }
+    
+    if (!insertBefore) {
+        newIndex++; // Insert after the target
+    }
+    
+    // Insert at new position
+    activities.splice(newIndex, 0, draggedActivity);
+    
+    // Save back to localStorage
+    localStorage.setItem('wtd-activities', JSON.stringify(activities));
+    
+    // Mark that user has custom ordered activities
+    localStorage.setItem('wtd-has-custom-order', 'true');
+}
 function getActivityDetails(activity) {
     const details = [];
     
@@ -1559,7 +1679,13 @@ async function getUserLocation() {
         return cachedLocation;
     }
     
-    // Try to get user's current location
+    // For Electron apps, geolocation often fails due to API restrictions
+    // Let's skip geolocation and just return null to prompt user for manual location
+    console.log('Skipping geolocation in Electron app - prompting for manual location');
+    return null;
+    
+    // Try to get user's current location (commented out due to API issues)
+    /*
     return new Promise((resolve) => {
         if (navigator.geolocation) {
             console.log('Attempting to get user location...');
@@ -1603,6 +1729,7 @@ async function getUserLocation() {
             resolve(null);
         }
     });
+    */
 }
 
 // Update weather display (updated version)
