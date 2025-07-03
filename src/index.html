@@ -9,8 +9,14 @@
 <body>
     <!-- Top bar with weather -->
     <div class="top-bar">
-        <div class="settings-button" id="settingsButton" title="Settings">
-            ⚙️
+        <div class="left-controls">
+            <div class="settings-button" id="settingsButton" title="Settings">
+                ⚙️
+            </div>
+            <div class="theme-toggle" id="themeToggle">
+                <div class="theme-icon sun-icon" id="sunIcon" title="Light mode">☀️</div>
+                <div class="theme-icon moon-icon" id="moonIcon" title="Dark mode">🌙</div>
+            </div>
         </div>
         <div class="spacer"></div>
         <div class="weather-display" id="weatherDisplay">
@@ -26,7 +32,7 @@
     <!-- Main action button -->
     <div class="main-action">
         <button class="wtd-button" id="tellMeWhatToDo">
-            Tell Me What To Do
+            Tell Me What To Do!
         </button>
     </div>
 
@@ -137,7 +143,7 @@
                         <label class="sub-checkbox daylight-checkbox">
                             <input type="checkbox" id="daylightOnly">
                             <span class="checkmark"></span>
-                            Daylight Only (Sunrise to Sunset)
+                            <span id="daylightOnlyLabel">Daylight Only (Sunrise to Sunset)</span>
                         </label>
                         
                         <div class="time-controls" id="timeControls">

@@ -1,4 +1,4 @@
-/* Color palette */
+/* Color palette - Dark theme (default) */
 :root {
     --bg-dark: #212121;
     --fg-light: #EEEEEE;
@@ -10,6 +10,51 @@
     --wtd-button-bg: darkgreen;
     --wtd-button-active-bg: #018400;
     --input-bg: #333333;
+}
+
+/* Light theme */
+[data-theme="light"] {
+    --bg-dark: #FFFFFF;
+    --fg-light: #212121;
+    --fg-muted: #666666;
+    --accent: #4CAF50;
+    --button-bg: #F5F5F5;
+    --button-active-bg: #E0E0E0;
+    --separator: #CCCCCC;
+    --wtd-button-bg: #4CAF50;
+    --wtd-button-active-bg: #45a049;
+    --input-bg: #F8F8F8;
+}
+
+/* Auto theme detection */
+@media (prefers-color-scheme: light) {
+    [data-theme="auto"] {
+        --bg-dark: #FFFFFF;
+        --fg-light: #212121;
+        --fg-muted: #666666;
+        --accent: #4CAF50;
+        --button-bg: #F5F5F5;
+        --button-active-bg: #E0E0E0;
+        --separator: #CCCCCC;
+        --wtd-button-bg: #4CAF50;
+        --wtd-button-active-bg: #45a049;
+        --input-bg: #F8F8F8;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    [data-theme="auto"] {
+        --bg-dark: #212121;
+        --fg-light: #EEEEEE;
+        --fg-muted: #B0B0B0;
+        --accent: #4CAF50;
+        --button-bg: #424242;
+        --button-active-bg: #616161;
+        --separator: #888888;
+        --wtd-button-bg: darkgreen;
+        --wtd-button-active-bg: #018400;
+        --input-bg: #333333;
+    }
 }
 
 * {
@@ -37,6 +82,12 @@ body {
     background-color: var(--bg-dark);
 }
 
+.left-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .settings-button {
     color: var(--fg-muted);
     font-size: 16px;
@@ -50,6 +101,39 @@ body {
 .settings-button:hover {
     color: var(--fg-light);
     background-color: var(--button-bg);
+}
+
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px;
+    background-color: var(--button-bg);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.theme-icon {
+    font-size: 14px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.theme-icon:hover {
+    background-color: var(--button-active-bg);
+}
+
+.theme-icon.active {
+    background-color: var(--accent);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-icon.inactive {
+    opacity: 0.4;
+    filter: grayscale(100%);
 }
 
 .spacer {

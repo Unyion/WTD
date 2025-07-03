@@ -16,6 +16,9 @@ const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
 const settingsButton = document.getElementById('settingsButton');
+const themeToggle = document.getElementById('themeToggle');
+const sunIcon = document.getElementById('sunIcon');
+const moonIcon = document.getElementById('moonIcon');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -23,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     populateTimeOptions();
     loadActivities();
+    
+    // Initialize theme
+    initializeTheme();
+    setupSystemThemeListener();
     
     // Force weather update immediately and log it
     console.log('Forcing weather update...');
@@ -64,6 +71,17 @@ function setupEventListeners() {
         settingsButton.addEventListener('click', () => {
             console.log('Settings button clicked');
             showSettingsModal();
+        });
+    }
+    
+    // Theme toggle clicks
+    if (sunIcon && moonIcon) {
+        sunIcon.addEventListener('click', () => {
+            setTheme('light');
+        });
+        
+        moonIcon.addEventListener('click', () => {
+            setTheme('dark');
         });
     }
     
@@ -864,7 +882,19 @@ function hideContextMenu() {
     }
 }
 
-// Get current conditions (updated to use actual weather data)
+// Update daylight label with real sunrise/sunset times
+function updateDaylightLabel() {
+    const daylightLabel = document.getElementById('daylightOnlyLabel');
+    if (daylightLabel && window.sunriseTime && window.sunsetTime) {
+        const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const effectiveSunsetTime = new Date(window.sunsetTime.getTime() - (60 * 60 * 1000));
+        const effectiveSunsetStr = effectiveSunsetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        daylightLabel.textContent = `Daylight Only (${sunriseStr} - ${effectiveSunsetStr})`;
+    } else if (daylightLabel) {
+        // Fallback text when times not available
+        daylightLabel.textContent = 'Daylight Only (Sunrise to Sunset)';
+    }
+}
 function getCurrentConditions() {
     const now = new Date();
     const month = now.getMonth();
@@ -1154,7 +1184,7 @@ function showEditModal(activity) {
                 
                 <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 15px; font-size: 12px;">
                     <input type="checkbox" id="editDaylightOnly" ${activity.daylightOnly ? 'checked' : ''} style="margin-right: 10px;">
-                    Daylight Only (Sunrise to Sunset)
+                    <span id="editDaylightOnlyLabel">Daylight Only (Sunrise to Sunset)</span>
                 </label>
                 
                 <div id="editTimeControls" style="margin-bottom: 15px;">
@@ -1227,6 +1257,9 @@ function showEditModal(activity) {
     
     // Setup event listeners for the modal
     setupEditModalEventListeners(activity);
+    
+    // Update daylight label with current times
+    updateEditDaylightLabel();
     
     // Focus on the name input
     const nameInput = document.getElementById('editActivityName');
@@ -1455,6 +1488,7 @@ function showSettingsModal() {
     const currentLocation = localStorage.getItem('wtd-location') || '';
     const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
     const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    const currentTheme = localStorage.getItem('wtd-theme') || 'dark';
     
     // Get current time for examples
     const now = new Date();
@@ -1529,6 +1563,25 @@ function showSettingsModal() {
                 <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
                     <input type="radio" name="tempUnit" value="C" ${currentTempUnit === 'C' ? 'checked' : ''} style="margin-right: 8px;">
                     Celsius (°C)
+                </label>
+            </div>
+        </div>
+
+        <!-- Theme Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Theme:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="light" ${currentTheme === 'light' ? 'checked' : ''} style="margin-right: 8px;">
+                    ☀️ Light
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="dark" ${currentTheme === 'dark' ? 'checked' : ''} style="margin-right: 8px;">
+                    🌙 Dark
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="auto" ${currentTheme === 'auto' ? 'checked' : ''} style="margin-right: 8px;">
+                    🔄 Auto
                 </label>
             </div>
         </div>
@@ -1632,6 +1685,7 @@ function saveSettings() {
     const location = document.getElementById('settingsLocation').value.trim();
     const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
     const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
+    const theme = document.querySelector('input[name="theme"]:checked').value;
     
     // Save to localStorage
     if (location) {
@@ -1643,7 +1697,10 @@ function saveSettings() {
     localStorage.setItem('wtd-time-format', timeFormat);
     localStorage.setItem('wtd-temp-unit', tempUnit);
     
-    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit });
+    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme });
+    
+    // Apply theme immediately
+    setTheme(theme);
     
     // Close modal
     closeSettingsModal();
@@ -1674,7 +1731,68 @@ function closeSettingsModal() {
     }
 }
 
-// Get user's location or use saved location
+// Initialize theme system
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('wtd-theme') || 'dark';
+    setTheme(savedTheme);
+}
+
+// Set theme and update UI
+function setTheme(theme) {
+    console.log('Setting theme to:', theme);
+    
+    // Apply theme to document
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Save theme preference
+    localStorage.setItem('wtd-theme', theme);
+    
+    // Update theme toggle UI
+    updateThemeToggle(theme);
+}
+
+// Update theme toggle visual state
+function updateThemeToggle(currentTheme) {
+    if (!sunIcon || !moonIcon) return;
+    
+    // Reset classes
+    sunIcon.classList.remove('active', 'inactive');
+    moonIcon.classList.remove('active', 'inactive');
+    
+    if (currentTheme === 'light') {
+        sunIcon.classList.add('active');
+        moonIcon.classList.add('inactive');
+    } else if (currentTheme === 'dark') {
+        moonIcon.classList.add('active');
+        sunIcon.classList.add('inactive');
+    } else {
+        // Auto mode - show both as inactive/neutral
+        sunIcon.classList.add('inactive');
+        moonIcon.classList.add('inactive');
+    }
+}
+
+// Get current system theme preference
+function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+    return 'light';
+}
+
+// Listen for system theme changes when in auto mode
+function setupSystemThemeListener() {
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addEventListener('change', () => {
+            const currentTheme = localStorage.getItem('wtd-theme');
+            if (currentTheme === 'auto') {
+                // Force re-evaluation of auto theme
+                setTheme('auto');
+            }
+        });
+    }
+}
 async function getUserLocation() {
     // First check if we have a saved location preference
     const savedLocation = localStorage.getItem('wtd-location');
@@ -1854,6 +1972,9 @@ async function updateWeather() {
                 localStorage.setItem('wtd-current-location', weatherData.name);
                 console.log('Stored current location as:', weatherData.name);
             }
+            
+            // Update daylight label with real times
+            updateDaylightLabel();
             
             console.log('Weather display updated to:', weatherText);
             console.log('Current time when updated:', new Date().toLocaleString());
