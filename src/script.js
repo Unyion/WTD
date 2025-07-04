@@ -496,7 +496,19 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     deleteBtn.addEventListener('mouseenter', () => {
         deleteIcon.style.opacity = '0';
         deleteIconHover.style.opacity = '1';
-        deleteIconHover.style.filter = 'hue-rotate(0deg) brightness(2) saturate(3) contrast(1.5)';
+        
+        // Check current theme for appropriate hover effect
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const isLightMode = currentTheme === 'light' || 
+                           (currentTheme === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
+        
+        if (isLightMode) {
+            // In light mode, make it darker on hover
+            deleteIconHover.style.filter = 'hue-rotate(0deg) brightness(0.3) saturate(2) contrast(2)';
+        } else {
+            // In dark mode, make it brighter on hover
+            deleteIconHover.style.filter = 'hue-rotate(0deg) brightness(2) saturate(3) contrast(1.5)';
+        }
     });
     deleteBtn.addEventListener('mouseleave', () => {
         deleteIcon.style.opacity = '1';
