@@ -155,7 +155,7 @@ body {
     font-family: 'Academy Engraved LET', 'Arial', sans-serif;
     font-size: 28px;
     color: var(--fg-light);
-    font-weight: normal;
+    font-weight: 600;
 }
 
 /* Main action button */
