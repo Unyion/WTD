@@ -103,39 +103,6 @@ body {
     background-color: var(--button-bg);
 }
 
-.theme-toggle {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px;
-    background-color: var(--button-bg);
-    border-radius: 6px;
-    transition: all 0.2s ease;
-}
-
-.theme-icon {
-    font-size: 14px;
-    padding: 4px 6px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    user-select: none;
-}
-
-.theme-icon:hover {
-    background-color: var(--button-active-bg);
-}
-
-.theme-icon.active {
-    background-color: var(--accent);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.theme-icon.inactive {
-    opacity: 0.4;
-    filter: grayscale(100%);
-}
-
 .spacer {
     flex: 1;
 }
@@ -143,6 +110,9 @@ body {
 .weather-display {
     color: var(--fg-muted);
     font-size: 12px;
+    text-align: right;
+    white-space: pre-line;
+    line-height: 1.3;
 }
 
 /* Main title */
