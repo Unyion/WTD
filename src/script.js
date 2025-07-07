@@ -35,6 +35,185 @@ document.addEventListener('DOMContentLoaded', () => {
     validateForm(); // Initial validation
 });
 
+// Get state abbreviation from full name or return as-is if already abbreviated
+function getStateAbbreviation(stateName) {
+    const stateMap = {
+        'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+        'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+        'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+        'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+        'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+        'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+        'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+        'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+        'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+        'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+    };
+    
+    const lowerState = stateName.toLowerCase();
+    
+    // If it's a full state name, return abbreviation
+    if (stateMap[lowerState]) {
+        return stateMap[lowerState];
+    }
+    
+    // If it's already a 2-letter abbreviation, return it uppercase
+    if (stateName.length === 2) {
+        return stateName.toUpperCase();
+    }
+    
+    return null;
+}
+
+// Search for cities using OpenWeatherMap geocoding API
+async function searchCities(query) {
+    if (!query || query.length < 2) return [];
+    
+    try {
+        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${API_KEY}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Geocoding API request failed');
+        
+        const locations = await response.json();
+        
+        // Format results as "City, State" for US locations or "City, Country" for others
+        return locations.map(location => {
+            if (location.country === 'US' && location.state) {
+                const stateAbbr = getStateAbbreviation(location.state) || location.state;
+                return {
+                    display: `${location.name}, ${stateAbbr}`,
+                    value: `${location.name},${stateAbbr},US`,
+                    lat: location.lat,
+                    lon: location.lon
+                };
+            } else {
+                return {
+                    display: `${location.name}, ${location.country}`,
+                    value: `${location.name},${location.country}`,
+                    lat: location.lat,
+                    lon: location.lon
+                };
+            }
+        });
+    } catch (error) {
+        console.error('Error searching cities:', error);
+        return [];
+    }
+}
+
+// Setup location autocomplete dropdown
+function setupLocationAutocomplete(inputElement) {
+    let currentDropdown = null;
+    let searchTimeout = null;
+    
+    inputElement.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        
+        // Clear existing timeout
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+        
+        // Hide dropdown if query is too short
+        if (query.length < 2) {
+            hideLocationDropdown();
+            return;
+        }
+        
+        // Debounce search
+        searchTimeout = setTimeout(async () => {
+            const results = await searchCities(query);
+            showLocationDropdown(inputElement, results);
+        }, 300);
+    });
+    
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!inputElement.contains(e.target) && !e.target.closest('.location-dropdown')) {
+            hideLocationDropdown();
+        }
+    });
+    
+    // Hide dropdown when input loses focus (with delay to allow clicking dropdown)
+    inputElement.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (!document.activeElement?.closest('.location-dropdown')) {
+                hideLocationDropdown();
+            }
+        }, 200);
+    });
+    
+    function showLocationDropdown(inputElement, results) {
+        hideLocationDropdown();
+        
+        if (results.length === 0) return;
+        
+        const dropdown = document.createElement('div');
+        dropdown.className = 'location-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: var(--input-bg);
+            border: 1px solid var(--button-bg);
+            border-top: none;
+            border-radius: 0 0 3px 3px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1001;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        `;
+        
+        results.forEach(result => {
+            const option = document.createElement('div');
+            option.className = 'location-option';
+            option.style.cssText = `
+                padding: 8px 12px;
+                cursor: pointer;
+                font-size: 12px;
+                color: var(--fg-light);
+                transition: background-color 0.2s ease;
+            `;
+            option.textContent = result.display;
+            
+            option.addEventListener('mouseenter', () => {
+                option.style.backgroundColor = 'var(--button-active-bg)';
+            });
+            
+            option.addEventListener('mouseleave', () => {
+                option.style.backgroundColor = 'transparent';
+            });
+            
+            option.addEventListener('click', () => {
+                inputElement.value = result.value;
+                hideLocationDropdown();
+                // Trigger input event to update any listeners
+                inputElement.dispatchEvent(new Event('input'));
+            });
+            
+            dropdown.appendChild(option);
+        });
+        
+        // Position dropdown relative to input
+        const inputRect = inputElement.getBoundingClientRect();
+        const inputParent = inputElement.parentElement;
+        inputParent.style.position = 'relative';
+        inputParent.appendChild(dropdown);
+        
+        currentDropdown = dropdown;
+    }
+    
+    function hideLocationDropdown() {
+        if (currentDropdown) {
+            currentDropdown.remove();
+            currentDropdown = null;
+        }
+    }
+}
+
 // Setup all event listeners
 function setupEventListeners() {
     // Main checkbox toggles
@@ -237,6 +416,768 @@ async function addActivity() {
         name: activityName,
         weatherDependent: weatherDependentCheckbox.checked,
         weatherRestrictions: [],
+        seasonal: document.getElementById('editSeasonal').checked,
+        seasons: [],
+        timeDependent: document.getElementById('editTimeDependent').checked,
+        daylightOnly: document.getElementById('editDaylightOnly').checked,
+        startTime: document.getElementById('editStartTime').value,
+        endTime: document.getElementById('editEndTime').value,
+        dayOfWeekDependent: document.getElementById('editDayOfWeek').checked,
+        daysOfWeek: []
+    };
+    
+    // Collect weather restrictions
+    if (updatedActivity.weatherDependent) {
+        const weatherCheckboxes = document.getElementById('editWeatherOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.weatherRestrictions = Array.from(weatherCheckboxes).map(cb => cb.value);
+    }
+    
+    // Collect seasonal restrictions
+    if (updatedActivity.seasonal) {
+        const seasonalCheckboxes = document.getElementById('editSeasonalOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.seasons = Array.from(seasonalCheckboxes).map(cb => cb.value);
+        
+        if (updatedActivity.seasons.length === 0) {
+            showNotification('Please select at least one season', 'error');
+            return;
+        }
+    }
+    
+    // Collect day of week restrictions
+    if (updatedActivity.dayOfWeekDependent) {
+        const dayCheckboxes = document.getElementById('editDayOfWeekOptions').querySelectorAll('input[type="checkbox"]:checked');
+        updatedActivity.daysOfWeek = Array.from(dayCheckboxes).map(cb => cb.value);
+        
+        if (updatedActivity.daysOfWeek.length === 0) {
+            showNotification('Please select at least one day of the week', 'error');
+            return;
+        }
+    }
+    
+    // Validate time range
+    if (updatedActivity.timeDependent && !updatedActivity.daylightOnly) {
+        const startHour = parseInt(updatedActivity.startTime.split(':')[0]);
+        const endHour = parseInt(updatedActivity.endTime.split(':')[0]);
+        
+        if (startHour >= endHour) {
+            showNotification('End time must be after start time', 'error');
+            return;
+        }
+    }
+    
+    try {
+        // Update activity in storage
+        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+        const index = activities.findIndex(a => a.id === originalActivity.id);
+        
+        if (index !== -1) {
+            // Check for duplicate names (excluding current activity)
+            const existingActivity = activities.find(a => a.id !== originalActivity.id && a.name.toLowerCase() === activityName.toLowerCase());
+            if (existingActivity) {
+                showNotification('Activity with this name already exists', 'error');
+                return;
+            }
+            
+            activities[index] = updatedActivity;
+            localStorage.setItem('wtd-activities', JSON.stringify(activities));
+            
+            // Close modal and refresh
+            closeEditModal();
+            loadActivities();
+            showNotification('Activity updated successfully!', 'success');
+        }
+    } catch (error) {
+        console.error('Error updating activity:', error);
+        showNotification('Error updating activity', 'error');
+    }
+}
+
+// Show settings modal
+function showSettingsModal() {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'settings-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    // Get current settings
+    const currentLocation = localStorage.getItem('wtd-location') || '';
+    const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
+    const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    const currentTheme = localStorage.getItem('wtd-theme') || 'auto';
+    
+    // Get current time for examples
+    const now = new Date();
+    const hour12 = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+    });
+    const hour24 = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+    });
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 500px;
+        color: var(--fg-light);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    `;
+    
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 18px; text-align: center;">Settings</h2>
+        
+        <!-- Location Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
+            <input type="text" id="settingsLocation" placeholder="Start typing a city name..." style="
+                width: 100%;
+                background-color: var(--input-bg);
+                color: var(--fg-light);
+                border: 1px solid var(--button-bg);
+                padding: 8px 12px;
+                font-size: 12px;
+                border-radius: 3px;
+                outline: none;
+                margin-bottom: 5px;
+            " value="${currentLocation}">
+            <div style="font-size: 10px; color: var(--fg-muted); font-style: italic;">
+                Search for your city and select from the dropdown, or leave blank for auto-detect
+            </div>
+        </div>
+
+        <!-- Time Format Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Time Format:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="timeFormat" value="12hr" ${currentTimeFormat === '12hr' ? 'checked' : ''} style="margin-right: 8px;">
+                    12-hour (${hour12})
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="timeFormat" value="24hr" ${currentTimeFormat === '24hr' ? 'checked' : ''} style="margin-right: 8px;">
+                    24-hour (${hour24})
+                </label>
+            </div>
+        </div>
+
+        <!-- Temperature Unit Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Temperature Unit:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="tempUnit" value="F" ${currentTempUnit === 'F' ? 'checked' : ''} style="margin-right: 8px;">
+                    Fahrenheit (°F)
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="tempUnit" value="C" ${currentTempUnit === 'C' ? 'checked' : ''} style="margin-right: 8px;">
+                    Celsius (°C)
+                </label>
+            </div>
+        </div>
+
+        <!-- Theme Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Theme:</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="light" ${currentTheme === 'light' ? 'checked' : ''} style="margin-right: 8px;">
+                    ☀️ Light
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="dark" ${currentTheme === 'dark' ? 'checked' : ''} style="margin-right: 8px;">
+                    🌙 Dark
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+                    <input type="radio" name="theme" value="auto" ${currentTheme === 'auto' ? 'checked' : ''} style="margin-right: 8px;">
+                    🔄 Auto (System Default)
+                </label>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
+            <button id="saveSettingsBtn" style="
+                background-color: var(--accent);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Save Settings</button>
+            <button id="cancelSettingsBtn" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Setup event listeners for the settings modal
+    setupSettingsModalEventListeners();
+    
+    // Setup location autocomplete
+    const locationInput = document.getElementById('settingsLocation');
+    setupLocationAutocomplete(locationInput);
+    
+    // Focus on the location input
+    locationInput.focus();
+    
+    // Add enter key listener for save
+    const handleSettingsEnterKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveSettings();
+        }
+    };
+    
+    // Add enter key listener to all inputs in the modal
+    modal.addEventListener('keydown', handleSettingsEnterKey);
+}
+
+// Setup event listeners for settings modal
+function setupSettingsModalEventListeners() {
+    const saveBtn = document.getElementById('saveSettingsBtn');
+    const cancelBtn = document.getElementById('cancelSettingsBtn');
+    
+    // Add hover effects for modal buttons
+    saveBtn.addEventListener('mouseenter', () => {
+        saveBtn.style.backgroundColor = '#2e7d32'; // Darker green
+    });
+    saveBtn.addEventListener('mouseleave', () => {
+        saveBtn.style.backgroundColor = 'var(--accent)';
+    });
+    
+    cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.backgroundColor = '#d32f2f'; // Red
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-bg)';
+    });
+    
+    // Save button
+    saveBtn.addEventListener('click', () => {
+        saveSettings();
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', () => {
+        closeSettingsModal();
+    });
+    
+    // Close on overlay click
+    document.getElementById('settings-modal-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'settings-modal-overlay') {
+            closeSettingsModal();
+        }
+    });
+    
+    // Close on escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeSettingsModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Save settings
+function saveSettings() {
+    const location = document.getElementById('settingsLocation').value.trim();
+    const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
+    const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
+    const theme = document.querySelector('input[name="theme"]:checked').value;
+    
+    // Save to localStorage
+    if (location) {
+        localStorage.setItem('wtd-location', location);
+    } else {
+        localStorage.removeItem('wtd-location'); // Remove to trigger auto-detect
+    }
+    
+    localStorage.setItem('wtd-time-format', timeFormat);
+    localStorage.setItem('wtd-temp-unit', tempUnit);
+    
+    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme });
+    
+    // Apply theme immediately
+    setTheme(theme);
+    
+    // Close modal
+    closeSettingsModal();
+    
+    // Refresh time options if format changed
+    populateTimeOptions();
+    
+    // Refresh weather with new settings
+    updateWeather();
+    
+    // Show success notification
+    showNotification('Settings saved successfully!', 'success');
+}
+
+// Close edit modal
+function closeEditModal() {
+    const overlay = document.getElementById('edit-modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+// Close settings modal
+function closeSettingsModal() {
+    const overlay = document.getElementById('settings-modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+// Initialize theme system
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('wtd-theme') || 'auto';
+    setTheme(savedTheme);
+}
+
+// Set theme and update UI
+function setTheme(theme) {
+    console.log('Setting theme to:', theme);
+    
+    // Apply theme to document
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Save theme preference
+    localStorage.setItem('wtd-theme', theme);
+}
+
+// Get current system theme preference
+function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+    return 'light';
+}
+
+// Listen for system theme changes when in auto mode
+function setupSystemThemeListener() {
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addEventListener('change', () => {
+            const currentTheme = localStorage.getItem('wtd-theme');
+            if (currentTheme === 'auto') {
+                // Force re-evaluation of auto theme
+                setTheme('auto');
+            }
+        });
+    }
+}
+
+// Update edit modal daylight label
+function updateEditDaylightLabel() {
+    const daylightLabel = document.getElementById('editDaylightOnlyLabel');
+    if (daylightLabel && window.sunriseTime && window.sunsetTime) {
+        const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const effectiveSunsetTime = new Date(window.sunsetTime.getTime() - (60 * 60 * 1000));
+        const effectiveSunsetStr = effectiveSunsetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        daylightLabel.textContent = `Daylight Only (${sunriseStr} - ${effectiveSunsetStr})`;
+    } else if (daylightLabel) {
+        // Fallback text when times not available
+        daylightLabel.textContent = 'Daylight Only (Sunrise to Sunset)';
+    }
+}
+
+async function getUserLocation() {
+    // First check if we have a saved location preference
+    const savedLocation = localStorage.getItem('wtd-location');
+    if (savedLocation && savedLocation !== 'auto') {
+        console.log('Using saved location:', savedLocation);
+        return savedLocation;
+    }
+    
+    // Check if we have a recent cached location to avoid repeated API calls
+    const cachedLocation = localStorage.getItem('wtd-cached-location');
+    const cacheTimestamp = localStorage.getItem('wtd-cache-timestamp');
+    const now = Date.now();
+    
+    // Use cached location if less than 30 minutes old
+    if (cachedLocation && cacheTimestamp && (now - parseInt(cacheTimestamp)) < 30 * 60 * 1000) {
+        console.log('Using cached location:', cachedLocation);
+        return cachedLocation;
+    }
+    
+    // For Electron apps, geolocation often fails due to API restrictions
+    // Let's skip geolocation and just return null to prompt user for manual location
+    console.log('Skipping geolocation in Electron app - prompting for manual location');
+    return null;
+}
+
+// Update weather display (updated version)
+async function updateWeather() {
+    console.log('updateWeather() called at:', new Date().toLocaleTimeString());
+    
+    try {
+        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+        
+        // Get user's location (auto-detect or saved preference)
+        const location = await getUserLocation();
+        
+        if (!location) {
+            // No location available - show error message
+            weatherDisplay.textContent = '📍 Location not found - Click to set';
+            weatherDisplay.style.cursor = 'pointer';
+            weatherDisplay.style.color = '#ff9800'; // Orange warning color
+            
+            // Disable "Tell Me What To Do" button
+            updateTellMeWhatToDoButton(false);
+            
+            // Don't try to load activities without location
+            return;
+        }
+        
+        console.log('Using location for weather:', location);
+        
+        // Build URL - different format for coordinates vs city name
+        let url;
+        const timestamp = Date.now();
+        const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+        const units = tempUnit === 'F' ? 'imperial' : 'metric';
+        
+        if (location.includes('lat=')) {
+            // Using coordinates
+            url = `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
+        } else {
+            // Using city name
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
+        }
+        
+        console.log('About to fetch weather from URL:', url);
+        
+        // Add explicit timeout and error handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(url, { 
+            signal: controller.signal,
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'WTD-App/1.0'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('Fetch completed successfully');
+        console.log('Weather API response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
+        if (response.ok) {
+            console.log('Response is OK, parsing JSON...');
+            const weatherData = await response.json();
+            console.log('Raw weather data received:', JSON.stringify(weatherData, null, 2));
+            
+            const condition = weatherData.weather[0].main.toLowerCase();
+            const description = weatherData.weather[0].description;
+            const temp = Math.round(weatherData.main.temp);
+            const emoji = getWeatherEmoji(condition);
+            
+            // Get sunrise and sunset times
+            const sunrise = new Date(weatherData.sys.sunrise * 1000);
+            const sunset = new Date(weatherData.sys.sunset * 1000);
+            
+            // Store sunrise/sunset times globally for daylight checks
+            window.sunriseTime = sunrise;
+            window.sunsetTime = sunset;
+            
+            // Get temperature unit preference
+            const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+            const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
+            
+            console.log('Parsed weather info:');
+            console.log('- Condition:', condition);
+            console.log('- Description:', description);
+            console.log('- Temperature:', temp);
+            console.log('- Emoji:', emoji);
+            console.log('- Location:', weatherData.name);
+            console.log('- Sunrise:', sunrise.toLocaleTimeString());
+            console.log('- Sunset:', sunset.toLocaleTimeString());
+            
+            // Capitalize first letter of description
+            const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
+            
+            // Get city name and try to extract state
+            const cityName = weatherData.name || 'Unknown Location';
+            const countryCode = weatherData.sys.country;
+            
+            // Format location with state if available
+            let locationText = cityName;
+            if (countryCode === 'US') {
+                // Try to extract state from the saved location input
+                const savedLocation = localStorage.getItem('wtd-location');
+                if (savedLocation) {
+                    // Handle various formats: "City, State", "City, ST", "City, ST, US", etc.
+                    const locationParts = savedLocation.split(',').map(part => part.trim());
+                    if (locationParts.length >= 2) {
+                        const statePart = locationParts[1];
+                        // Convert full state name to abbreviation if needed
+                        const stateAbbr = getStateAbbreviation(statePart);
+                        if (stateAbbr) {
+                            locationText = `${cityName}, ${stateAbbr}`;
+                        }
+                    }
+                }
+            }
+            
+            const weatherText = `${locationText}\n${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
+            weatherDisplay.textContent = weatherText;
+            weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
+            weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
+            
+            // Enable "Tell Me What To Do" button
+            updateTellMeWhatToDoButton(true);
+            
+            // Store the actual location name returned by API
+            if (weatherData.name) {
+                localStorage.setItem('wtd-current-location', weatherData.name);
+                console.log('Stored current location as:', weatherData.name);
+            }
+            
+            // Update daylight label with real times
+            updateDaylightLabel();
+            
+            console.log('Weather display updated to:', weatherText);
+            console.log('Current time when updated:', new Date().toLocaleString());
+            
+            // Update activities list based on new weather
+            loadActivities();
+        } else {
+            console.log('Response not OK, reading error...');
+            const errorText = await response.text();
+            console.error('Weather API error response:', errorText);
+            throw new Error(`Weather API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        
+    } catch (error) {
+        console.error('Error in updateWeather():', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Show specific error messages
+        if (error.name === 'AbortError') {
+            weatherDisplay.textContent = '⏱️ Weather request timed out';
+        } else if (error.message.includes('Failed to fetch')) {
+            weatherDisplay.textContent = '🌐 Cannot connect to weather service';
+        } else if (error.message.includes('API')) {
+            weatherDisplay.textContent = '❌ Weather API error';
+        } else {
+            weatherDisplay.textContent = '☀️ Weather unavailable';  
+        }
+        
+        weatherDisplay.style.color = '#ff6b6b'; // Red error color
+        
+        // Disable "Tell Me What To Do" button on error
+        updateTellMeWhatToDoButton(false);
+        
+        // Still try to load activities with default conditions
+        loadActivities();
+    }
+}
+
+// Update the "Tell Me What To Do" button state
+function updateTellMeWhatToDoButton(enabled) {
+    if (enabled) {
+        tellMeWhatToDoButton.disabled = false;
+        tellMeWhatToDoButton.style.opacity = '1';
+        tellMeWhatToDoButton.style.cursor = 'pointer';
+        tellMeWhatToDoButton.title = 'Get a random activity suggestion';
+    } else {
+        tellMeWhatToDoButton.disabled = true;
+        tellMeWhatToDoButton.style.opacity = '0.5';
+        tellMeWhatToDoButton.style.cursor = 'not-allowed';
+        tellMeWhatToDoButton.title = 'Location not found! Click weather display to set location';
+        
+        // Create instant tooltip for disabled state
+        let tooltipTimeout;
+        
+        tellMeWhatToDoButton.addEventListener('mouseenter', () => {
+            if (tellMeWhatToDoButton.disabled) {
+                clearTimeout(tooltipTimeout);
+                showTooltip({ clientX: tellMeWhatToDoButton.getBoundingClientRect().left + 50, clientY: tellMeWhatToDoButton.getBoundingClientRect().top - 10 }, 'Location not found! Click weather display to set location');
+            }
+        });
+        
+        tellMeWhatToDoButton.addEventListener('mouseleave', () => {
+            hideTooltip();
+        });
+    }
+}
+
+// Get weather emoji based on condition and time of day
+function getWeatherEmoji(condition, isNightTime = false) {
+    const currentHour = new Date().getHours();
+    const actualIsNight = currentHour < 6 || currentHour > 20; // 8PM to 6AM is night
+    
+    const emojiMap = {
+        'clear': actualIsNight ? '🌙' : '☀️',  // Moon for night, sun for day
+        'clouds': actualIsNight ? '☁️' : '⛅',  // Keep clouds but could differentiate
+        'rain': '🌧️',
+        'drizzle': '🌦️',
+        'thunderstorm': '⛈️',
+        'snow': '❄️',
+        'mist': '🌫️',
+        'fog': '🌫️',
+        'haze': '🌫️',
+        'dust': '🌪️',
+        'sand': '🌪️',
+        'ash': '🌋',
+        'squall': '💨',
+        'tornado': '🌪️'
+    };
+    
+    return emojiMap[condition.toLowerCase()] || (actualIsNight ? '🌙' : '☀️');
+}
+
+// Delete activity
+function deleteActivity(activityId) {
+    if (confirm('Are you sure you want to delete this activity?')) {
+        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
+        activities = activities.filter(activity => activity.id !== activityId);
+        localStorage.setItem('wtd-activities', JSON.stringify(activities));
+        
+        loadActivities();
+        showNotification('Activity deleted', 'success');
+    }
+}
+
+// Reset form to initial state
+function resetForm() {
+    activityNameInput.value = '';
+    weatherDependentCheckbox.checked = false;
+    seasonalCheckbox.checked = false;
+    timeDependentCheckbox.checked = false;
+    daylightOnlyCheckbox.checked = false;
+    
+    if (dayOfWeekCheckbox) {
+        dayOfWeekCheckbox.checked = false;
+    }
+    
+    // Hide all sub-options
+    toggleWeatherOptions();
+    toggleSeasonalOptions();
+    toggleTimeOptions();
+    toggleDayOfWeekOptions();
+    
+    // Reset time selects
+    startTimeSelect.value = '09:00';
+    endTimeSelect.value = '17:00';
+    
+    // Uncheck all sub-options
+    const allCheckboxes = document.querySelectorAll('.sub-options input[type="checkbox"]');
+    allCheckboxes.forEach(cb => cb.checked = false);
+    
+    // Reset button
+    addActivityButton.textContent = 'Add Activity';
+    delete addActivityButton.dataset.editingId;
+    
+    validateForm();
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // Remove existing notification
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    
+    const colors = {
+        success: '#4CAF50',
+        error: '#ff6b6b',
+        warning: '#ff9800',
+        info: '#2196F3'
+    };
+    
+    notification.style.cssText = `
+        position: fixed;
+        top: 50px;
+        right: 20px;
+        background-color: ${colors[type] || colors.info};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Utility function to get season from date
+function getSeasonFromDate(date) {
+    const month = date.getMonth();
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'fall';
+    return 'winter';
+}
+
+// Update weather every 2 minutes for testing (change back to 5 minutes later)
+setInterval(() => {
+    console.log('Auto weather update triggered at:', new Date().toLocaleTimeString());
+    updateWeather();
+}, 2 * 60 * 1000);
         seasonal: seasonalCheckbox.checked,
         seasons: [],
         timeDependent: timeDependentCheckbox.checked,
@@ -508,106 +1449,6 @@ function createActivityElement(activity, index, isAvailable, currentConditions) 
     return div;
 }
 
-// Setup drag and drop functionality
-function setupDragAndDrop(element) {
-    let draggedElement = null;
-    
-    element.addEventListener('dragstart', (e) => {
-        draggedElement = element;
-        element.style.opacity = '0.5';
-        element.style.transform = 'rotate(2deg)';
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', element.outerHTML);
-    });
-    
-    element.addEventListener('dragend', (e) => {
-        element.style.opacity = '1';
-        element.style.transform = 'none';
-        draggedElement = null;
-    });
-    
-    element.addEventListener('dragover', (e) => {
-        if (draggedElement && draggedElement !== element) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            
-            // Visual feedback
-            const rect = element.getBoundingClientRect();
-            const midY = rect.top + rect.height / 2;
-            
-            if (e.clientY < midY) {
-                element.style.borderTop = '3px solid var(--accent)';
-                element.style.borderBottom = 'none';
-            } else {
-                element.style.borderBottom = '3px solid var(--accent)';
-                element.style.borderTop = 'none';
-            }
-        }
-    });
-    
-    element.addEventListener('dragleave', (e) => {
-        element.style.borderTop = 'none';
-        element.style.borderBottom = 'none';
-    });
-    
-    element.addEventListener('drop', (e) => {
-        e.preventDefault();
-        element.style.borderTop = 'none';
-        element.style.borderBottom = 'none';
-        
-        if (draggedElement && draggedElement !== element) {
-            // Determine drop position
-            const rect = element.getBoundingClientRect();
-            const midY = rect.top + rect.height / 2;
-            const insertBefore = e.clientY < midY;
-            
-            // Get activity IDs
-            const draggedId = draggedElement.dataset.activityId;
-            const targetId = element.dataset.activityId;
-            
-            // Reorder activities in storage
-            reorderActivities(draggedId, targetId, insertBefore);
-            
-            // Refresh the activities list
-            loadActivities();
-            
-            showNotification('Activities reordered!', 'success');
-        }
-    });
-}
-
-// Reorder activities in localStorage
-function reorderActivities(draggedId, targetId, insertBefore) {
-    let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
-    
-    // Find the dragged activity
-    const draggedIndex = activities.findIndex(a => a.id === draggedId);
-    const targetIndex = activities.findIndex(a => a.id === targetId);
-    
-    if (draggedIndex === -1 || targetIndex === -1) return;
-    
-    // Remove the dragged activity
-    const draggedActivity = activities.splice(draggedIndex, 1)[0];
-    
-    // Calculate new insertion index
-    let newIndex = targetIndex;
-    if (draggedIndex < targetIndex) {
-        newIndex--; // Adjust for removed element
-    }
-    
-    if (!insertBefore) {
-        newIndex++; // Insert after the target
-    }
-    
-    // Insert at new position
-    activities.splice(newIndex, 0, draggedActivity);
-    
-    // Save back to localStorage
-    localStorage.setItem('wtd-activities', JSON.stringify(activities));
-    
-    // Mark that user has custom ordered activities
-    localStorage.setItem('wtd-has-custom-order', 'true');
-}
 function getActivityDetails(activity) {
     const details = [];
     
@@ -893,6 +1734,7 @@ function updateDaylightLabel() {
         daylightLabel.textContent = 'Daylight Only (Sunrise to Sunset)';
     }
 }
+
 function getCurrentConditions() {
     const now = new Date();
     const month = now.getMonth();
@@ -1387,943 +2229,3 @@ function saveEditedActivity(originalActivity) {
         ...originalActivity,
         name: activityName,
         weatherDependent: document.getElementById('editWeatherDependent').checked,
-        weatherRestrictions: [],
-        seasonal: document.getElementById('editSeasonal').checked,
-        seasons: [],
-        timeDependent: document.getElementById('editTimeDependent').checked,
-        daylightOnly: document.getElementById('editDaylightOnly').checked,
-        startTime: document.getElementById('editStartTime').value,
-        endTime: document.getElementById('editEndTime').value,
-        dayOfWeekDependent: document.getElementById('editDayOfWeek').checked,
-        daysOfWeek: []
-    };
-    
-    // Collect weather restrictions
-    if (updatedActivity.weatherDependent) {
-        const weatherCheckboxes = document.getElementById('editWeatherOptions').querySelectorAll('input[type="checkbox"]:checked');
-        updatedActivity.weatherRestrictions = Array.from(weatherCheckboxes).map(cb => cb.value);
-    }
-    
-    // Collect seasonal restrictions
-    if (updatedActivity.seasonal) {
-        const seasonalCheckboxes = document.getElementById('editSeasonalOptions').querySelectorAll('input[type="checkbox"]:checked');
-        updatedActivity.seasons = Array.from(seasonalCheckboxes).map(cb => cb.value);
-        
-        if (updatedActivity.seasons.length === 0) {
-            showNotification('Please select at least one season', 'error');
-            return;
-        }
-    }
-    
-    // Collect day of week restrictions
-    if (updatedActivity.dayOfWeekDependent) {
-        const dayCheckboxes = document.getElementById('editDayOfWeekOptions').querySelectorAll('input[type="checkbox"]:checked');
-        updatedActivity.daysOfWeek = Array.from(dayCheckboxes).map(cb => cb.value);
-        
-        if (updatedActivity.daysOfWeek.length === 0) {
-            showNotification('Please select at least one day of the week', 'error');
-            return;
-        }
-    }
-    
-    // Validate time range
-    if (updatedActivity.timeDependent && !updatedActivity.daylightOnly) {
-        const startHour = parseInt(updatedActivity.startTime.split(':')[0]);
-        const endHour = parseInt(updatedActivity.endTime.split(':')[0]);
-        
-        if (startHour >= endHour) {
-            showNotification('End time must be after start time', 'error');
-            return;
-        }
-    }
-    
-    try {
-        // Update activity in storage
-        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
-        const index = activities.findIndex(a => a.id === originalActivity.id);
-        
-        if (index !== -1) {
-            // Check for duplicate names (excluding current activity)
-            const existingActivity = activities.find(a => a.id !== originalActivity.id && a.name.toLowerCase() === activityName.toLowerCase());
-            if (existingActivity) {
-                showNotification('Activity with this name already exists', 'error');
-                return;
-            }
-            
-            activities[index] = updatedActivity;
-            localStorage.setItem('wtd-activities', JSON.stringify(activities));
-            
-            // Close modal and refresh
-            closeEditModal();
-            loadActivities();
-            showNotification('Activity updated successfully!', 'success');
-        }
-    } catch (error) {
-        console.error('Error updating activity:', error);
-        showNotification('Error updating activity', 'error');
-    }
-}
-
-// Show settings modal
-function showSettingsModal() {
-    // Create modal overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'settings-modal-overlay';
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-    `;
-    
-    // Get current settings
-    const currentLocation = localStorage.getItem('wtd-location') || '';
-    const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
-    const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
-    const currentTheme = localStorage.getItem('wtd-theme') || 'auto';
-    
-    // Get current time for examples
-    const now = new Date();
-    const hour12 = now.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-    });
-    const hour24 = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-    });
-    
-    // Create modal content
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        background-color: var(--bg-dark);
-        border: 2px solid var(--accent);
-        border-radius: 8px;
-        padding: 30px;
-        max-width: 500px;
-        color: var(--fg-light);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    `;
-    
-    modal.innerHTML = `
-        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 18px; text-align: center;">Settings</h2>
-        
-        <!-- Location Setting -->
-        <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
-            <input type="text" id="settingsLocation" placeholder="Start typing a city name..." style="
-                width: 100%;
-                background-color: var(--input-bg);
-                color: var(--fg-light);
-                border: 1px solid var(--button-bg);
-                padding: 8px 12px;
-                font-size: 12px;
-                border-radius: 3px;
-                outline: none;
-                margin-bottom: 5px;
-            " value="${currentLocation}">
-            <div style="font-size: 10px; color: var(--fg-muted); font-style: italic;">
-                Search for your city and select from the dropdown, or leave blank for auto-detect
-            </div>
-        </div>
-
-        <!-- Time Format Setting -->
-        <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Time Format:</label>
-            <div style="display: flex; gap: 15px;">
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="timeFormat" value="12hr" ${currentTimeFormat === '12hr' ? 'checked' : ''} style="margin-right: 8px;">
-                    12-hour (${hour12})
-                </label>
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="timeFormat" value="24hr" ${currentTimeFormat === '24hr' ? 'checked' : ''} style="margin-right: 8px;">
-                    24-hour (${hour24})
-                </label>
-            </div>
-        </div>
-
-        <!-- Temperature Unit Setting -->
-        <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Temperature Unit:</label>
-            <div style="display: flex; gap: 15px;">
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="tempUnit" value="F" ${currentTempUnit === 'F' ? 'checked' : ''} style="margin-right: 8px;">
-                    Fahrenheit (°F)
-                </label>
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="tempUnit" value="C" ${currentTempUnit === 'C' ? 'checked' : ''} style="margin-right: 8px;">
-                    Celsius (°C)
-                </label>
-            </div>
-        </div>
-
-        <!-- Theme Setting -->
-        <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Theme:</label>
-            <div style="display: flex; gap: 15px;">
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="theme" value="light" ${currentTheme === 'light' ? 'checked' : ''} style="margin-right: 8px;">
-                    ☀️ Light
-                </label>
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="theme" value="dark" ${currentTheme === 'dark' ? 'checked' : ''} style="margin-right: 8px;">
-                    🌙 Dark
-                </label>
-                <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-                    <input type="radio" name="theme" value="auto" ${currentTheme === 'auto' ? 'checked' : ''} style="margin-right: 8px;">
-                    🔄 Auto (System Default)
-                </label>
-            </div>
-        </div>
-
-        <!-- Buttons -->
-        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
-            <button id="saveSettingsBtn" style="
-                background-color: var(--accent);
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 12px;
-                transition: background-color 0.2s ease;
-            ">Save Settings</button>
-            <button id="cancelSettingsBtn" style="
-                background-color: var(--button-bg);
-                color: var(--fg-light);
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 12px;
-                transition: background-color 0.2s ease;
-            ">Cancel</button>
-        </div>
-    `;
-    
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    
-    // Setup event listeners for the settings modal
-    setupSettingsModalEventListeners();
-    
-    // Setup location autocomplete
-    const locationInput = document.getElementById('settingsLocation');
-    setupLocationAutocomplete(locationInput);
-    
-    // Focus on the location input
-    locationInput.focus();
-    
-    // Add enter key listener for save
-    const handleSettingsEnterKey = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            saveSettings();
-        }
-    };
-    
-    // Add enter key listener to all inputs in the modal
-    modal.addEventListener('keydown', handleSettingsEnterKey);
-}
-
-// Setup event listeners for settings modal
-function setupSettingsModalEventListeners() {
-    const saveBtn = document.getElementById('saveSettingsBtn');
-    const cancelBtn = document.getElementById('cancelSettingsBtn');
-    
-    // Add hover effects for modal buttons
-    saveBtn.addEventListener('mouseenter', () => {
-        saveBtn.style.backgroundColor = '#2e7d32'; // Darker green
-    });
-    saveBtn.addEventListener('mouseleave', () => {
-        saveBtn.style.backgroundColor = 'var(--accent)';
-    });
-    
-    cancelBtn.addEventListener('mouseenter', () => {
-        cancelBtn.style.backgroundColor = '#d32f2f'; // Red
-    });
-    cancelBtn.addEventListener('mouseleave', () => {
-        cancelBtn.style.backgroundColor = 'var(--button-bg)';
-    });
-    
-    // Save button
-    saveBtn.addEventListener('click', () => {
-        saveSettings();
-    });
-    
-    // Cancel button
-    cancelBtn.addEventListener('click', () => {
-        closeSettingsModal();
-    });
-    
-    // Close on overlay click
-    document.getElementById('settings-modal-overlay').addEventListener('click', (e) => {
-        if (e.target.id === 'settings-modal-overlay') {
-            closeSettingsModal();
-        }
-    });
-    
-    // Close on escape key
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-            closeSettingsModal();
-            document.removeEventListener('keydown', handleEscape);
-        }
-    };
-    document.addEventListener('keydown', handleEscape);
-}
-
-// Save settings
-function saveSettings() {
-    const location = document.getElementById('settingsLocation').value.trim();
-    const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
-    const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
-    const theme = document.querySelector('input[name="theme"]:checked').value;
-    
-    // Save to localStorage
-    if (location) {
-        localStorage.setItem('wtd-location', location);
-    } else {
-        localStorage.removeItem('wtd-location'); // Remove to trigger auto-detect
-    }
-    
-    localStorage.setItem('wtd-time-format', timeFormat);
-    localStorage.setItem('wtd-temp-unit', tempUnit);
-    
-    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme });
-    
-    // Apply theme immediately
-    setTheme(theme);
-    
-    // Close modal
-    closeSettingsModal();
-    
-    // Refresh time options if format changed
-    populateTimeOptions();
-    
-    // Refresh weather with new settings
-    updateWeather();
-    
-    // Show success notification
-    showNotification('Settings saved successfully!', 'success');
-}
-
-// Close edit modal
-function closeEditModal() {
-    const overlay = document.getElementById('edit-modal-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
-}
-
-// Close settings modal
-function closeSettingsModal() {
-    const overlay = document.getElementById('settings-modal-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
-}
-
-// Initialize theme system
-function initializeTheme() {
-    const savedTheme = localStorage.getItem('wtd-theme') || 'auto';
-    setTheme(savedTheme);
-}
-
-// Set theme and update UI
-function setTheme(theme) {
-    console.log('Setting theme to:', theme);
-    
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', theme);
-    
-    // Save theme preference
-    localStorage.setItem('wtd-theme', theme);
-}
-
-// Get current system theme preference
-function getSystemTheme() {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-    }
-    return 'light';
-}
-
-// Listen for system theme changes when in auto mode
-function setupSystemThemeListener() {
-    if (window.matchMedia) {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        mediaQuery.addEventListener('change', () => {
-            const currentTheme = localStorage.getItem('wtd-theme');
-            if (currentTheme === 'auto') {
-                // Force re-evaluation of auto theme
-                setTheme('auto');
-            }
-        });
-    }
-}
-
-// Update edit modal daylight label
-function updateEditDaylightLabel() {
-    const daylightLabel = document.getElementById('editDaylightOnlyLabel');
-    if (daylightLabel && window.sunriseTime && window.sunsetTime) {
-        const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const effectiveSunsetTime = new Date(window.sunsetTime.getTime() - (60 * 60 * 1000));
-        const effectiveSunsetStr = effectiveSunsetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        daylightLabel.textContent = `Daylight Only (${sunriseStr} - ${effectiveSunsetStr})`;
-    } else if (daylightLabel) {
-        // Fallback text when times not available
-        daylightLabel.textContent = 'Daylight Only (Sunrise to Sunset)';
-    }
-}
-
-// Get state abbreviation from full name or return as-is if already abbreviated
-function getStateAbbreviation(stateName) {
-    const stateMap = {
-        'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-        'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-        'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-        'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-        'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-        'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-        'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-        'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-        'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-        'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
-    };
-    
-    const lowerState = stateName.toLowerCase();
-    
-    // If it's a full state name, return abbreviation
-    if (stateMap[lowerState]) {
-        return stateMap[lowerState];
-    }
-    
-    // If it's already a 2-letter abbreviation, return it uppercase
-    if (stateName.length === 2) {
-        return stateName.toUpperCase();
-    }
-    
-    return null;
-}
-
-// Search for cities using OpenWeatherMap geocoding API
-async function searchCities(query) {
-    if (!query || query.length < 2) return [];
-    
-    try {
-        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${API_KEY}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Geocoding API request failed');
-        
-        const locations = await response.json();
-        
-        // Format results as "City, State" for US locations or "City, Country" for others
-        return locations.map(location => {
-            if (location.country === 'US' && location.state) {
-                const stateAbbr = getStateAbbreviation(location.state) || location.state;
-                return {
-                    display: `${location.name}, ${stateAbbr}`,
-                    value: `${location.name},${stateAbbr},US`,
-                    lat: location.lat,
-                    lon: location.lon
-                };
-            } else {
-                return {
-                    display: `${location.name}, ${location.country}`,
-                    value: `${location.name},${location.country}`,
-                    lat: location.lat,
-                    lon: location.lon
-                };
-            }
-        });
-    } catch (error) {
-        console.error('Error searching cities:', error);
-        return [];
-    }
-}
-
-// Setup location autocomplete dropdown
-function setupLocationAutocomplete(inputElement) {
-    let currentDropdown = null;
-    let searchTimeout = null;
-    
-    inputElement.addEventListener('input', (e) => {
-        const query = e.target.value.trim();
-        
-        // Clear existing timeout
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-        }
-        
-        // Hide dropdown if query is too short
-        if (query.length < 2) {
-            hideLocationDropdown();
-            return;
-        }
-        
-        // Debounce search
-        searchTimeout = setTimeout(async () => {
-            const results = await searchCities(query);
-            showLocationDropdown(inputElement, results);
-        }, 300);
-    });
-    
-    // Hide dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!inputElement.contains(e.target) && !e.target.closest('.location-dropdown')) {
-            hideLocationDropdown();
-        }
-    });
-    
-    // Hide dropdown when input loses focus (with delay to allow clicking dropdown)
-    inputElement.addEventListener('blur', () => {
-        setTimeout(() => {
-            if (!document.activeElement?.closest('.location-dropdown')) {
-                hideLocationDropdown();
-            }
-        }, 200);
-    });
-    
-    function showLocationDropdown(inputElement, results) {
-        hideLocationDropdown();
-        
-        if (results.length === 0) return;
-        
-        const dropdown = document.createElement('div');
-        dropdown.className = 'location-dropdown';
-        dropdown.style.cssText = `
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background-color: var(--input-bg);
-            border: 1px solid var(--button-bg);
-            border-top: none;
-            border-radius: 0 0 3px 3px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1001;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        `;
-        
-        results.forEach(result => {
-            const option = document.createElement('div');
-            option.className = 'location-option';
-            option.style.cssText = `
-                padding: 8px 12px;
-                cursor: pointer;
-                font-size: 12px;
-                color: var(--fg-light);
-                transition: background-color 0.2s ease;
-            `;
-            option.textContent = result.display;
-            
-            option.addEventListener('mouseenter', () => {
-                option.style.backgroundColor = 'var(--button-active-bg)';
-            });
-            
-            option.addEventListener('mouseleave', () => {
-                option.style.backgroundColor = 'transparent';
-            });
-            
-            option.addEventListener('click', () => {
-                inputElement.value = result.value;
-                hideLocationDropdown();
-                // Trigger input event to update any listeners
-                inputElement.dispatchEvent(new Event('input'));
-            });
-            
-            dropdown.appendChild(option);
-        });
-        
-        // Position dropdown relative to input
-        const inputRect = inputElement.getBoundingClientRect();
-        const inputParent = inputElement.parentElement;
-        inputParent.style.position = 'relative';
-        inputParent.appendChild(dropdown);
-        
-        currentDropdown = dropdown;
-    }
-    
-    function hideLocationDropdown() {
-        if (currentDropdown) {
-            currentDropdown.remove();
-            currentDropdown = null;
-        }
-    }
-}
-    // First check if we have a saved location preference
-    const savedLocation = localStorage.getItem('wtd-location');
-    if (savedLocation && savedLocation !== 'auto') {
-        console.log('Using saved location:', savedLocation);
-        return savedLocation;
-    }
-    
-    // Check if we have a recent cached location to avoid repeated API calls
-    const cachedLocation = localStorage.getItem('wtd-cached-location');
-    const cacheTimestamp = localStorage.getItem('wtd-cache-timestamp');
-    const now = Date.now();
-    
-    // Use cached location if less than 30 minutes old
-    if (cachedLocation && cacheTimestamp && (now - parseInt(cacheTimestamp)) < 30 * 60 * 1000) {
-        console.log('Using cached location:', cachedLocation);
-        return cachedLocation;
-    }
-    
-    // For Electron apps, geolocation often fails due to API restrictions
-    // Let's skip geolocation and just return null to prompt user for manual location
-    console.log('Skipping geolocation in Electron app - prompting for manual location');
-    return null;
-}
-
-// Update weather display (updated version)
-async function updateWeather() {
-    console.log('updateWeather() called at:', new Date().toLocaleTimeString());
-    
-    try {
-        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-        
-        // Get user's location (auto-detect or saved preference)
-        const location = await getUserLocation();
-        
-        if (!location) {
-            // No location available - show error message
-            weatherDisplay.textContent = '📍 Location not found - Click to set';
-            weatherDisplay.style.cursor = 'pointer';
-            weatherDisplay.style.color = '#ff9800'; // Orange warning color
-            
-            // Disable "Tell Me What To Do" button
-            updateTellMeWhatToDoButton(false);
-            
-            // Don't try to load activities without location
-            return;
-        }
-        
-        console.log('Using location for weather:', location);
-        
-        // Build URL - different format for coordinates vs city name
-        let url;
-        const timestamp = Date.now();
-        const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
-        const units = tempUnit === 'F' ? 'imperial' : 'metric';
-        
-        if (location.includes('lat=')) {
-            // Using coordinates
-            url = `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
-        } else {
-            // Using city name
-            url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
-        }
-        
-        console.log('About to fetch weather from URL:', url);
-        
-        // Add explicit timeout and error handling
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        const response = await fetch(url, { 
-            signal: controller.signal,
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'WTD-App/1.0'
-            }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        console.log('Fetch completed successfully');
-        console.log('Weather API response status:', response.status);
-        console.log('Response ok:', response.ok);
-        
-        if (response.ok) {
-            console.log('Response is OK, parsing JSON...');
-            const weatherData = await response.json();
-            console.log('Raw weather data received:', JSON.stringify(weatherData, null, 2));
-            
-            const condition = weatherData.weather[0].main.toLowerCase();
-            const description = weatherData.weather[0].description;
-            const temp = Math.round(weatherData.main.temp);
-            const emoji = getWeatherEmoji(condition);
-            
-            // Get sunrise and sunset times
-            const sunrise = new Date(weatherData.sys.sunrise * 1000);
-            const sunset = new Date(weatherData.sys.sunset * 1000);
-            
-            // Store sunrise/sunset times globally for daylight checks
-            window.sunriseTime = sunrise;
-            window.sunsetTime = sunset;
-            
-            // Get temperature unit preference
-            const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
-            const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
-            
-            console.log('Parsed weather info:');
-            console.log('- Condition:', condition);
-            console.log('- Description:', description);
-            console.log('- Temperature:', temp);
-            console.log('- Emoji:', emoji);
-            console.log('- Location:', weatherData.name);
-            console.log('- Sunrise:', sunrise.toLocaleTimeString());
-            console.log('- Sunset:', sunset.toLocaleTimeString());
-            
-            // Capitalize first letter of description
-            const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
-            
-            // Get city name and try to extract state
-            const cityName = weatherData.name || 'Unknown Location';
-            const countryCode = weatherData.sys.country;
-            
-            // Format location with state if available
-            let locationText = cityName;
-            if (countryCode === 'US') {
-                // Try to extract state from the saved location input
-                const savedLocation = localStorage.getItem('wtd-location');
-                if (savedLocation) {
-                    // Handle various formats: "City, State", "City, ST", "City, ST, US", etc.
-                    const locationParts = savedLocation.split(',').map(part => part.trim());
-                    if (locationParts.length >= 2) {
-                        const statePart = locationParts[1];
-                        // Convert full state name to abbreviation if needed
-                        const stateAbbr = getStateAbbreviation(statePart);
-                        if (stateAbbr) {
-                            locationText = `${cityName}, ${stateAbbr}`;
-                        }
-                    }
-                }
-            }
-            
-            const weatherText = `${locationText}\n${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
-            weatherDisplay.textContent = weatherText;
-            weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
-            weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
-            
-            // Enable "Tell Me What To Do" button
-            updateTellMeWhatToDoButton(true);
-            
-            // Store the actual location name returned by API
-            if (weatherData.name) {
-                localStorage.setItem('wtd-current-location', weatherData.name);
-                console.log('Stored current location as:', weatherData.name);
-            }
-            
-            // Update daylight label with real times
-            updateDaylightLabel();
-            
-            console.log('Weather display updated to:', weatherText);
-            console.log('Current time when updated:', new Date().toLocaleString());
-            
-            // Update activities list based on new weather
-            loadActivities();
-        } else {
-            console.log('Response not OK, reading error...');
-            const errorText = await response.text();
-            console.error('Weather API error response:', errorText);
-            throw new Error(`Weather API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-        }
-        
-    } catch (error) {
-        console.error('Error in updateWeather():', error);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        
-        // Show specific error messages
-        if (error.name === 'AbortError') {
-            weatherDisplay.textContent = '⏱️ Weather request timed out';
-        } else if (error.message.includes('Failed to fetch')) {
-            weatherDisplay.textContent = '🌐 Cannot connect to weather service';
-        } else if (error.message.includes('API')) {
-            weatherDisplay.textContent = '❌ Weather API error';
-        } else {
-            weatherDisplay.textContent = '☀️ Weather unavailable';  
-        }
-        
-        weatherDisplay.style.color = '#ff6b6b'; // Red error color
-        
-        // Disable "Tell Me What To Do" button on error
-        updateTellMeWhatToDoButton(false);
-        
-        // Still try to load activities with default conditions
-        loadActivities();
-    }
-}
-
-// Update the "Tell Me What To Do" button state
-function updateTellMeWhatToDoButton(enabled) {
-    if (enabled) {
-        tellMeWhatToDoButton.disabled = false;
-        tellMeWhatToDoButton.style.opacity = '1';
-        tellMeWhatToDoButton.style.cursor = 'pointer';
-        tellMeWhatToDoButton.title = 'Get a random activity suggestion';
-    } else {
-        tellMeWhatToDoButton.disabled = true;
-        tellMeWhatToDoButton.style.opacity = '0.5';
-        tellMeWhatToDoButton.style.cursor = 'not-allowed';
-        tellMeWhatToDoButton.title = 'Location not found! Click weather display to set location';
-        
-        // Create instant tooltip for disabled state
-        let tooltipTimeout;
-        
-        tellMeWhatToDoButton.addEventListener('mouseenter', () => {
-            if (tellMeWhatToDoButton.disabled) {
-                clearTimeout(tooltipTimeout);
-                showTooltip({ clientX: tellMeWhatToDoButton.getBoundingClientRect().left + 50, clientY: tellMeWhatToDoButton.getBoundingClientRect().top - 10 }, 'Location not found! Click weather display to set location');
-            }
-        });
-        
-        tellMeWhatToDoButton.addEventListener('mouseleave', () => {
-            hideTooltip();
-        });
-    }
-}
-
-// Get weather emoji based on condition and time of day
-function getWeatherEmoji(condition, isNightTime = false) {
-    const currentHour = new Date().getHours();
-    const actualIsNight = currentHour < 6 || currentHour > 20; // 8PM to 6AM is night
-    
-    const emojiMap = {
-        'clear': actualIsNight ? '🌙' : '☀️',  // Moon for night, sun for day
-        'clouds': actualIsNight ? '☁️' : '⛅',  // Keep clouds but could differentiate
-        'rain': '🌧️',
-        'drizzle': '🌦️',
-        'thunderstorm': '⛈️',
-        'snow': '❄️',
-        'mist': '🌫️',
-        'fog': '🌫️',
-        'haze': '🌫️',
-        'dust': '🌪️',
-        'sand': '🌪️',
-        'ash': '🌋',
-        'squall': '💨',
-        'tornado': '🌪️'
-    };
-    
-    return emojiMap[condition.toLowerCase()] || (actualIsNight ? '🌙' : '☀️');
-}
-
-// Delete activity
-function deleteActivity(activityId) {
-    if (confirm('Are you sure you want to delete this activity?')) {
-        let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
-        activities = activities.filter(activity => activity.id !== activityId);
-        localStorage.setItem('wtd-activities', JSON.stringify(activities));
-        
-        loadActivities();
-        showNotification('Activity deleted', 'success');
-    }
-}
-
-// Reset form to initial state
-function resetForm() {
-    activityNameInput.value = '';
-    weatherDependentCheckbox.checked = false;
-    seasonalCheckbox.checked = false;
-    timeDependentCheckbox.checked = false;
-    daylightOnlyCheckbox.checked = false;
-    
-    if (dayOfWeekCheckbox) {
-        dayOfWeekCheckbox.checked = false;
-    }
-    
-    // Hide all sub-options
-    toggleWeatherOptions();
-    toggleSeasonalOptions();
-    toggleTimeOptions();
-    toggleDayOfWeekOptions();
-    
-    // Reset time selects
-    startTimeSelect.value = '09:00';
-    endTimeSelect.value = '17:00';
-    
-    // Uncheck all sub-options
-    const allCheckboxes = document.querySelectorAll('.sub-options input[type="checkbox"]');
-    allCheckboxes.forEach(cb => cb.checked = false);
-    
-    // Reset button
-    addActivityButton.textContent = 'Add Activity';
-    delete addActivityButton.dataset.editingId;
-    
-    validateForm();
-}
-
-// Show notification
-function showNotification(message, type = 'info') {
-    // Remove existing notification
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    // Create notification
-    const notification = document.createElement('div');
-    notification.className = 'notification';
-    
-    const colors = {
-        success: '#4CAF50',
-        error: '#ff6b6b',
-        warning: '#ff9800',
-        info: '#2196F3'
-    };
-    
-    notification.style.cssText = `
-        position: fixed;
-        top: 50px;
-        right: 20px;
-        background-color: ${colors[type] || colors.info};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 5px;
-        font-size: 12px;
-        font-weight: bold;
-        z-index: 1000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    `;
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    // Animate in
-    setTimeout(() => {
-        notification.style.transform = 'translateX(0)';
-    }, 10);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
-}
-
-// Utility function to get season from date
-function getSeasonFromDate(date) {
-    const month = date.getMonth();
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'fall';
-    return 'winter';
-}
-
-// Update weather every 2 minutes for testing (change back to 5 minutes later)
-setInterval(() => {
-    console.log('Auto weather update triggered at:', new Date().toLocaleTimeString());
-    updateWeather();
-}, 2 * 60 * 1000);
