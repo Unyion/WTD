@@ -16,9 +16,6 @@ const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
 const settingsButton = document.getElementById('settingsButton');
-const themeToggle = document.getElementById('themeToggle');
-const sunIcon = document.getElementById('sunIcon');
-const moonIcon = document.getElementById('moonIcon');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -71,17 +68,6 @@ function setupEventListeners() {
         settingsButton.addEventListener('click', () => {
             console.log('Settings button clicked');
             showSettingsModal();
-        });
-    }
-    
-    // Theme toggle clicks
-    if (sunIcon && moonIcon) {
-        sunIcon.addEventListener('click', () => {
-            setTheme('light');
-        });
-        
-        moonIcon.addEventListener('click', () => {
-            setTheme('dark');
         });
     }
     
@@ -1500,7 +1486,7 @@ function showSettingsModal() {
     const currentLocation = localStorage.getItem('wtd-location') || '';
     const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
     const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
-    const currentTheme = localStorage.getItem('wtd-theme') || 'dark';
+    const currentTheme = localStorage.getItem('wtd-theme') || 'auto';
     
     // Get current time for examples
     const now = new Date();
@@ -1593,7 +1579,7 @@ function showSettingsModal() {
                 </label>
                 <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
                     <input type="radio" name="theme" value="auto" ${currentTheme === 'auto' ? 'checked' : ''} style="margin-right: 8px;">
-                    🔄 Auto
+                    🔄 Auto (System Default)
                 </label>
             </div>
         </div>
@@ -1745,7 +1731,7 @@ function closeSettingsModal() {
 
 // Initialize theme system
 function initializeTheme() {
-    const savedTheme = localStorage.getItem('wtd-theme') || 'dark';
+    const savedTheme = localStorage.getItem('wtd-theme') || 'auto';
     setTheme(savedTheme);
 }
 
@@ -1758,30 +1744,6 @@ function setTheme(theme) {
     
     // Save theme preference
     localStorage.setItem('wtd-theme', theme);
-    
-    // Update theme toggle UI
-    updateThemeToggle(theme);
-}
-
-// Update theme toggle visual state
-function updateThemeToggle(currentTheme) {
-    if (!sunIcon || !moonIcon) return;
-    
-    // Reset classes
-    sunIcon.classList.remove('active', 'inactive');
-    moonIcon.classList.remove('active', 'inactive');
-    
-    if (currentTheme === 'light') {
-        sunIcon.classList.add('active');
-        moonIcon.classList.add('inactive');
-    } else if (currentTheme === 'dark') {
-        moonIcon.classList.add('active');
-        sunIcon.classList.add('inactive');
-    } else {
-        // Auto mode - show both as inactive/neutral
-        sunIcon.classList.add('inactive');
-        moonIcon.classList.add('inactive');
-    }
 }
 
 // Get current system theme preference
@@ -1805,6 +1767,21 @@ function setupSystemThemeListener() {
         });
     }
 }
+
+// Update edit modal daylight label
+function updateEditDaylightLabel() {
+    const daylightLabel = document.getElementById('editDaylightOnlyLabel');
+    if (daylightLabel && window.sunriseTime && window.sunsetTime) {
+        const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const effectiveSunsetTime = new Date(window.sunsetTime.getTime() - (60 * 60 * 1000));
+        const effectiveSunsetStr = effectiveSunsetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        daylightLabel.textContent = `Daylight Only (${sunriseStr} - ${effectiveSunsetStr})`;
+    } else if (daylightLabel) {
+        // Fallback text when times not available
+        daylightLabel.textContent = 'Daylight Only (Sunrise to Sunset)';
+    }
+}
+
 async function getUserLocation() {
     // First check if we have a saved location preference
     const savedLocation = localStorage.getItem('wtd-location');
@@ -1828,53 +1805,6 @@ async function getUserLocation() {
     // Let's skip geolocation and just return null to prompt user for manual location
     console.log('Skipping geolocation in Electron app - prompting for manual location');
     return null;
-    
-    // Try to get user's current location (commented out due to API issues)
-    /*
-    return new Promise((resolve) => {
-        if (navigator.geolocation) {
-            console.log('Attempting to get user location...');
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const locationString = `lat=${lat}&lon=${lon}`;
-                    console.log('Got user coordinates:', lat, lon);
-                    
-                    // Cache the location to avoid repeated calls
-                    localStorage.setItem('wtd-cached-location', locationString);
-                    localStorage.setItem('wtd-cache-timestamp', now.toString());
-                    
-                    resolve(locationString);
-                },
-                (error) => {
-                    console.log('Geolocation failed:', error.message);
-                    console.log('Error code:', error.code);
-                    
-                    // More specific error handling
-                    if (error.code === 1) {
-                        console.log('Location permission denied by user');
-                    } else if (error.code === 2) {
-                        console.log('Location position unavailable (network issues)');
-                    } else if (error.code === 3) {
-                        console.log('Location request timed out');
-                    }
-                    
-                    // Return null instead of fallback location
-                    resolve(null);
-                },
-                {
-                    timeout: 20000, // Increased timeout even more
-                    enableHighAccuracy: false,
-                    maximumAge: 1800000 // 30 minutes - much longer cache
-                }
-            );
-        } else {
-            console.log('Geolocation not supported');
-            resolve(null);
-        }
-    });
-    */
 }
 
 // Update weather display (updated version)
