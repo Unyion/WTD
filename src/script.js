@@ -1901,10 +1901,29 @@ async function updateWeather() {
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
             
-            // Get city name from weather data
+            // Get city name and state from weather data
             const cityName = weatherData.name || 'Unknown Location';
+            const countryCode = weatherData.sys.country;
             
-            const weatherText = `${cityName}\n${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
+            // Format location with state if it's a US location
+            let locationText = cityName;
+            if (countryCode === 'US' && weatherData.sys.state) {
+                locationText = `${cityName}, ${weatherData.sys.state}`;
+            } else if (countryCode === 'US') {
+                // If no state in API response, try to extract from location input
+                const savedLocation = localStorage.getItem('wtd-location');
+                if (savedLocation && savedLocation.includes(',')) {
+                    const locationParts = savedLocation.split(',');
+                    if (locationParts.length >= 2) {
+                        const stateCode = locationParts[1].trim().toUpperCase();
+                        if (stateCode.length === 2) {
+                            locationText = `${cityName}, ${stateCode}`;
+                        }
+                    }
+                }
+            }
+            
+            const weatherText = `${locationText}\n${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
             weatherDisplay.textContent = weatherText;
             weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
             weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
