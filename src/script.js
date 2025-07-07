@@ -1901,7 +1901,10 @@ async function updateWeather() {
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
             
-            const weatherText = `${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
+            // Get city name from weather data
+            const cityName = weatherData.name || 'Unknown Location';
+            
+            const weatherText = `${cityName} • ${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
             weatherDisplay.textContent = weatherText;
             weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
             weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
