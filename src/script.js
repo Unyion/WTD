@@ -1519,7 +1519,7 @@ function showSettingsModal() {
         <!-- Location Setting -->
         <div style="margin-bottom: 20px;">
             <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
-            <input type="text" id="settingsLocation" placeholder="Start typing a city name..." style="
+            <input type="text" id="settingsLocation" placeholder="e.g. Denver,CO,US or leave blank for auto-detect" style="
                 width: 100%;
                 background-color: var(--input-bg);
                 color: var(--fg-light);
@@ -1531,7 +1531,7 @@ function showSettingsModal() {
                 margin-bottom: 5px;
             " value="${currentLocation}">
             <div style="font-size: 10px; color: var(--fg-muted); font-style: italic;">
-                Search for your city and select from the dropdown, or leave blank for auto-detect
+                Leave blank to auto-detect your location. Use format: City,State,Country
             </div>
         </div>
 
@@ -1615,11 +1615,8 @@ function showSettingsModal() {
     // Setup event listeners for the settings modal
     setupSettingsModalEventListeners();
     
-    // Setup location autocomplete
-    const locationInput = document.getElementById('settingsLocation');
-    setupLocationAutocomplete(locationInput);
-    
     // Focus on the location input
+    const locationInput = document.getElementById('settingsLocation');
     locationInput.focus();
     
     // Add enter key listener for save
@@ -1785,184 +1782,7 @@ function updateEditDaylightLabel() {
     }
 }
 
-// Get state abbreviation from full name or return as-is if already abbreviated
-function getStateAbbreviation(stateName) {
-    const stateMap = {
-        'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-        'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-        'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-        'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-        'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-        'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-        'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-        'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-        'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-        'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
-    };
-    
-    const lowerState = stateName.toLowerCase();
-    
-    // If it's a full state name, return abbreviation
-    if (stateMap[lowerState]) {
-        return stateMap[lowerState];
-    }
-    
-    // If it's already a 2-letter abbreviation, return it uppercase
-    if (stateName.length === 2) {
-        return stateName.toUpperCase();
-    }
-    
-    return null;
-}
-
-// Search for cities using OpenWeatherMap geocoding API
-async function searchCities(query) {
-    if (!query || query.length < 2) return [];
-    
-    try {
-        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${API_KEY}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Geocoding API request failed');
-        
-        const locations = await response.json();
-        
-        // Format results as "City, State" for US locations or "City, Country" for others
-        return locations.map(location => {
-            if (location.country === 'US' && location.state) {
-                const stateAbbr = getStateAbbreviation(location.state) || location.state;
-                return {
-                    display: `${location.name}, ${stateAbbr}`,
-                    value: `${location.name},${stateAbbr},US`,
-                    lat: location.lat,
-                    lon: location.lon
-                };
-            } else {
-                return {
-                    display: `${location.name}, ${location.country}`,
-                    value: `${location.name},${location.country}`,
-                    lat: location.lat,
-                    lon: location.lon
-                };
-            }
-        });
-    } catch (error) {
-        console.error('Error searching cities:', error);
-        return [];
-    }
-}
-
-// Setup location autocomplete dropdown
-function setupLocationAutocomplete(inputElement) {
-    let currentDropdown = null;
-    let searchTimeout = null;
-    
-    inputElement.addEventListener('input', (e) => {
-        const query = e.target.value.trim();
-        
-        // Clear existing timeout
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-        }
-        
-        // Hide dropdown if query is too short
-        if (query.length < 2) {
-            hideLocationDropdown();
-            return;
-        }
-        
-        // Debounce search
-        searchTimeout = setTimeout(async () => {
-            const results = await searchCities(query);
-            showLocationDropdown(inputElement, results);
-        }, 300);
-    });
-    
-    // Hide dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!inputElement.contains(e.target) && !e.target.closest('.location-dropdown')) {
-            hideLocationDropdown();
-        }
-    });
-    
-    // Hide dropdown when input loses focus (with delay to allow clicking dropdown)
-    inputElement.addEventListener('blur', () => {
-        setTimeout(() => {
-            if (!document.activeElement?.closest('.location-dropdown')) {
-                hideLocationDropdown();
-            }
-        }, 200);
-    });
-    
-    function showLocationDropdown(inputElement, results) {
-        hideLocationDropdown();
-        
-        if (results.length === 0) return;
-        
-        const dropdown = document.createElement('div');
-        dropdown.className = 'location-dropdown';
-        dropdown.style.cssText = `
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background-color: var(--input-bg);
-            border: 1px solid var(--button-bg);
-            border-top: none;
-            border-radius: 0 0 3px 3px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1001;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        `;
-        
-        results.forEach(result => {
-            const option = document.createElement('div');
-            option.className = 'location-option';
-            option.style.cssText = `
-                padding: 8px 12px;
-                cursor: pointer;
-                font-size: 12px;
-                color: var(--fg-light);
-                transition: background-color 0.2s ease;
-            `;
-            option.textContent = result.display;
-            
-            option.addEventListener('mouseenter', () => {
-                option.style.backgroundColor = 'var(--button-active-bg)';
-            });
-            
-            option.addEventListener('mouseleave', () => {
-                option.style.backgroundColor = 'transparent';
-            });
-            
-            option.addEventListener('click', () => {
-                inputElement.value = result.value;
-                hideLocationDropdown();
-                // Trigger input event to update any listeners
-                inputElement.dispatchEvent(new Event('input'));
-            });
-            
-            dropdown.appendChild(option);
-        });
-        
-        // Position dropdown relative to input
-        const inputRect = inputElement.getBoundingClientRect();
-        const inputParent = inputElement.parentElement;
-        inputParent.style.position = 'relative';
-        inputParent.appendChild(dropdown);
-        
-        currentDropdown = dropdown;
-    }
-    
-    function hideLocationDropdown() {
-        if (currentDropdown) {
-            currentDropdown.remove();
-            currentDropdown = null;
-        }
-    }
-}
+async function getUserLocation() {
     // First check if we have a saved location preference
     const savedLocation = localStorage.getItem('wtd-location');
     if (savedLocation && savedLocation !== 'auto') {
@@ -2081,24 +1901,23 @@ async function updateWeather() {
             // Capitalize first letter of description
             const capitalizedDescription = description.charAt(0).toUpperCase() + description.slice(1);
             
-            // Get city name and try to extract state
+            // Get city name and state from weather data
             const cityName = weatherData.name || 'Unknown Location';
             const countryCode = weatherData.sys.country;
             
-            // Format location with state if available
+            // Format location with state if it's a US location
             let locationText = cityName;
-            if (countryCode === 'US') {
-                // Try to extract state from the saved location input
+            if (countryCode === 'US' && weatherData.sys.state) {
+                locationText = `${cityName}, ${weatherData.sys.state}`;
+            } else if (countryCode === 'US') {
+                // If no state in API response, try to extract from location input
                 const savedLocation = localStorage.getItem('wtd-location');
-                if (savedLocation) {
-                    // Handle various formats: "City, State", "City, ST", "City, ST, US", etc.
-                    const locationParts = savedLocation.split(',').map(part => part.trim());
+                if (savedLocation && savedLocation.includes(',')) {
+                    const locationParts = savedLocation.split(',');
                     if (locationParts.length >= 2) {
-                        const statePart = locationParts[1];
-                        // Convert full state name to abbreviation if needed
-                        const stateAbbr = getStateAbbreviation(statePart);
-                        if (stateAbbr) {
-                            locationText = `${cityName}, ${stateAbbr}`;
+                        const stateCode = locationParts[1].trim().toUpperCase();
+                        if (stateCode.length === 2) {
+                            locationText = `${cityName}, ${stateCode}`;
                         }
                     }
                 }
