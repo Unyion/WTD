@@ -1904,7 +1904,7 @@ async function updateWeather() {
             // Get city name from weather data
             const cityName = weatherData.name || 'Unknown Location';
             
-            const weatherText = `${cityName} • ${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
+            const weatherText = `${cityName}\n${emoji} ${capitalizedDescription}, ${temp}${tempSuffix}`;
             weatherDisplay.textContent = weatherText;
             weatherDisplay.style.color = 'var(--fg-muted)'; // Reset color
             weatherDisplay.style.cursor = 'pointer'; // Keep clickable for manual refresh
