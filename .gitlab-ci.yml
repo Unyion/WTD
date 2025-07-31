@@ -36,7 +36,6 @@ build_windows:
     name: mcr.microsoft.com/windows/servercore:ltsc2022
     entrypoint: [""]
   before_script:
-    - choco install nodejs --version=18.19.0 -y
     - choco install git -y
     - refreshenv
   script:
