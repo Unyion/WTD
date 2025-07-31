@@ -13,6 +13,8 @@ A smart activity suggestion app that picks a random activity from your saved act
 2. Open the `.dmg` file
 3. Drag "What To Do" to your Applications folder
 4. Launch from Applications or Spotlight
+5. Trust the certificate in System Settings
+    1. If there is no option to trust in System Settings or you get an error telling you to move the file to the Trash, run the following command in Terminal: `sudo xattr -r -d com.apple.quarantine "/Applications/What To Do.app"`
 
 #### Windows
 1. Download the `.exe` installer from the [latest release](../../releases)
