@@ -98,6 +98,7 @@ create_release:
       - Download the `.dmg` file from the Packages above
       - Open the DMG and drag to Applications folder
       - Trust the certificate in System Settings if necessary
+        - If there is no option to trust in System Settings, run the following command in Terminal: `sudo xattr -r -d com.apple.quarantine "/Applications/What To Do.app"`
       
       **Windows**
       - Download the `.exe` installer from the Packages above  
