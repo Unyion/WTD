@@ -4,41 +4,91 @@ stages:
 
 variables:
   NODE_VERSION: "18"
-  
-# Build stage - creates the installers for all platforms
-build_app:
+
+# Build for macOS
+build_macos:
+  stage: build
+  tags:
+    - saas-macos-medium-m1  # GitLab Ultimate macOS runner
+  image: macos-13-xcode-15
+  script:
+    - echo "Building for macOS..."
+    - node --version
+    - npm --version
+    - npm ci
+    - npm run dist -- --mac
+    - echo "macOS build complete!"
+    - ls -la dist/
+  artifacts:
+    paths:
+      - dist/*.dmg
+      - dist/mac/
+    expire_in: 1 day
+  only:
+    - tags
+
+# Build for Windows  
+build_windows:
+  stage: build
+  tags:
+    - saas-windows-medium-amd64  # GitLab Ultimate Windows runner
+  image: 
+    name: mcr.microsoft.com/windows/servercore:ltsc2022
+    entrypoint: [""]
+  before_script:
+    - choco install nodejs --version=18.19.0 -y
+    - choco install git -y
+    - refreshenv
+  script:
+    - echo "Building for Windows..."
+    - node --version
+    - npm --version
+    - npm ci
+    - npm run dist -- --win
+    - echo "Windows build complete!"
+    - dir dist
+  artifacts:
+    paths:
+      - dist/*.exe
+      - dist/win-unpacked/
+    expire_in: 1 day
+  only:
+    - tags
+
+# Build for Linux
+build_linux:
   stage: build
   image: node:$NODE_VERSION
   before_script:
-    # Install system dependencies for Electron builds (including Linux support)
     - apt-get update -qq && apt-get install -y -qq git curl libxtst6 libxrandr2 libasound2 libpangocairo-1.0-0 libatk1.0-0 libcairo-gobject2 libgtk-3-0 libgdk-pixbuf2.0-0 libnss3 libxss1 libdrm2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libatspi2.0-0
   script:
-    - echo "Installing dependencies..."
+    - echo "Building for Linux..."
     - npm ci
-    - echo "Building Electron app for all platforms..."
-    - npm run dist
-    - echo "Build complete! Checking output..."
+    - npm run dist -- --linux
+    - echo "Linux build complete!"
     - ls -la dist/
-    - echo "Looking for specific file types..."
-    - find dist/ -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm"
   artifacts:
     paths:
-      - dist/
+      - dist/*.AppImage
+      - dist/*.deb
+      - dist/*.rpm
+      - dist/linux-unpacked/
     expire_in: 1 day
   only:
-    - tags  # Only runs when you create a tag like v1.0.0
+    - tags
 
 # Release stage - creates GitLab release with download links
 create_release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
-    - build_app
+    - build_macos
+    - build_windows  
+    - build_linux
   script:
     - echo "Creating GitLab release for $CI_COMMIT_TAG..."
-    - echo "Available files:"
-    - find dist/ -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" | head -10
-    - echo "Generating specific download URLs..."
+    - echo "Collecting artifacts from all platforms..."
+    - find . -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm"
   release:
     name: 'What To Do $CI_COMMIT_TAG'
     description: |
@@ -46,32 +96,45 @@ create_release:
       
       Your personal activity suggestion app based on weather and preferences!
       
-      ### Downloads:
-      - **macOS**: Download the .dmg file below
-      - **Windows**: Download the .exe file below  
-      - **Linux**: Download the .AppImage file below (portable) or .deb/.rpm for package managers
+      ### Platform Downloads:
+      
+      **🍎 macOS** 
+      - Download the `.dmg` file from the artifacts below
+      - Open the DMG and drag to Applications folder
+      
+      **🪟 Windows**
+      - Download the `.exe` installer from the artifacts below  
+      - Run the installer and follow the prompts
+      
+      **🐧 Linux**
+      - **AppImage**: Download `.AppImage`, make executable, and run
+      - **Package Managers**: Download `.deb` (Ubuntu/Debian) or `.rpm` (Fedora/CentOS)
+      
+      ### What's New:
+      - ✨ Initial release with weather-based activity suggestions
+      - 🌍 Location auto-detection with smart fallback search
+      - 🌦️ Activity filtering by weather, season, and time constraints
+      - 🌅 Smart daylight detection with 30-minute sunset buffer
+      - ⚡ Rate-limited weather updates to prevent API spam
+      - 🎨 Dark/Light theme support with system detection
+      - 📱 Random suggestion headers for engaging user experience
       
       ### Installation:
-      
-      **macOS**: Open the .dmg file and drag the app to Applications
-      **Windows**: Run the .exe installer  
-      **Linux**: Make the .AppImage executable (`chmod +x`) and run it, or install the .deb/.rpm package
-      
-      ### Changes in this version:
-      - Initial release with weather-based activity suggestions
-      - Location auto-detection and manual entry with autocomplete
-      - Activity filtering by weather, season, and time
-      - Smart daylight hour detection with 30-minute sunset buffer
-      - Rate-limited weather updates
-      - Dark/Light theme support
+      All platforms include the same features and functionality. Choose the format that works best for your system!
     tag_name: $CI_COMMIT_TAG
     assets:
       links:
-        - name: 'Browse All Downloads'
-          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_app'
-          link_type: 'other'
-        - name: 'Download Artifacts (All Platforms)'
-          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=build_app'
+        - name: '🍎 macOS Downloads (.dmg)'
+          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_macos'
           link_type: 'package'
+        - name: '🪟 Windows Downloads (.exe)'
+          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_windows'
+          link_type: 'package'
+        - name: '🐧 Linux Downloads (.AppImage, .deb, .rpm)'
+          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_linux'
+          link_type: 'package'
+        - name: '📦 All Platforms (Combined Download)'
+          url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=build_macos,build_windows,build_linux'
+          link_type: 'other'
   only:
     - tags
