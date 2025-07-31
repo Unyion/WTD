@@ -35,9 +35,6 @@ build_windows:
   image: 
     name: mcr.microsoft.com/windows/servercore:ltsc2022
     entrypoint: [""]
-  before_script:
-    - choco install git -y
-    - refreshenv
   script:
     - echo "Building for Windows..."
     - node --version
