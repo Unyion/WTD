@@ -1552,6 +1552,20 @@ async function suggestActivity() {
 
 // Show activity suggestion modal
 function showActivitySuggestion(activity) {
+    // Array of fun headers to randomize
+    const suggestionHeaders = [
+        "Let's Do This!",
+        "Today's Pick:",
+        "How About This?",
+        "Here's What I'm Thinking...",
+        "Thoughts?",
+        "Perfect for Right Now:"
+    ];
+    
+    // Pick a random header
+    const randomHeader = suggestionHeaders[Math.floor(Math.random() * suggestionHeaders.length)];
+    console.log('Selected random header:', randomHeader);
+    
     // Create modal overlay
     const overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -1580,7 +1594,7 @@ function showActivitySuggestion(activity) {
     `;
     
     modal.innerHTML = `
-        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 20px;">Suggested Activity</h2>
+        <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 20px;">${randomHeader}</h2>
         <div style="font-size: 24px; font-weight: bold; margin-bottom: 15px;">${activity.name}</div>
         <div style="font-size: 12px; color: var(--fg-muted); margin-bottom: 20px;">
             ${getActivityDetails(activity)}
@@ -1656,7 +1670,7 @@ function showActivitySuggestion(activity) {
     
     newBtn.addEventListener('click', () => {
         document.body.removeChild(overlay);
-        suggestActivity();
+        suggestActivity(); // This will pick a new random header too!
     });
     
     closeBtn.addEventListener('click', () => {
