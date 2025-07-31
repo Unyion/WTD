@@ -40,9 +40,9 @@ create_release:
     - find dist/ -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" | head -10
     - echo "Generating specific download URLs..."
   release:
-    name: 'What To Do v$CI_COMMIT_TAG'
+    name: 'What To Do $CI_COMMIT_TAG'
     description: |
-      ## What To Do v$CI_COMMIT_TAG
+      ## What To Do $CI_COMMIT_TAG
       
       Your personal activity suggestion app based on weather and preferences!
       
