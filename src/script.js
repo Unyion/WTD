@@ -45,6 +45,205 @@ const weatherRateLimit = {
     }
 };
 
+// Location autocomplete functionality
+const locationAutocomplete = {
+    suggestions: [],
+    selectedIndex: -1,
+    isVisible: false,
+    searchTimeout: null,
+    
+    async searchLocations(query) {
+        if (query.length < 2) {
+            this.hideSuggestions();
+            return;
+        }
+        
+        try {
+            const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+            const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${API_KEY}`;
+            
+            const response = await fetch(url);
+            if (response.ok) {
+                const locations = await response.json();
+                
+                // Format locations for display
+                this.suggestions = locations.map(location => {
+                    let displayName = location.name;
+                    let searchValue = location.name;
+                    
+                    // Add state for US locations
+                    if (location.country === 'US' && location.state) {
+                        displayName += `, ${location.state}`;
+                        searchValue += `,${location.state}`;
+                    }
+                    
+                    // Add country
+                    displayName += `, ${location.country}`;
+                    searchValue += `,${location.country}`;
+                    
+                    return {
+                        display: displayName,
+                        value: searchValue,
+                        lat: location.lat,
+                        lon: location.lon
+                    };
+                });
+                
+                this.showSuggestions();
+            }
+        } catch (error) {
+            console.error('Location search error:', error);
+            this.hideSuggestions();
+        }
+    },
+    
+    showSuggestions() {
+        const input = document.getElementById('settingsLocation');
+        const dropdown = this.getOrCreateDropdown();
+        
+        if (!input || this.suggestions.length === 0) {
+            this.hideSuggestions();
+            return;
+        }
+        
+        // Clear existing suggestions
+        dropdown.innerHTML = '';
+        
+        this.suggestions.forEach((suggestion, index) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.style.cssText = `
+                padding: 8px 12px;
+                cursor: pointer;
+                font-size: 12px;
+                color: var(--fg-light);
+                border-bottom: 1px solid var(--button-bg);
+                transition: background-color 0.2s ease;
+            `;
+            
+            item.textContent = suggestion.display;
+            
+            // Hover effects
+            item.addEventListener('mouseenter', () => {
+                this.selectedIndex = index;
+                this.updateSelection();
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                this.selectedIndex = -1;
+                this.updateSelection();
+            });
+            
+            // Click handler
+            item.addEventListener('click', () => {
+                this.selectSuggestion(index);
+            });
+            
+            dropdown.appendChild(item);
+        });
+        
+        // Position dropdown
+        const inputRect = input.getBoundingClientRect();
+        dropdown.style.cssText += `
+            position: fixed;
+            top: ${inputRect.bottom + 2}px;
+            left: ${inputRect.left}px;
+            width: ${inputRect.width}px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: var(--input-bg);
+            border: 1px solid var(--button-bg);
+            border-radius: 3px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            display: block;
+        `;
+        
+        this.isVisible = true;
+        this.selectedIndex = -1;
+    },
+    
+    hideSuggestions() {
+        const dropdown = document.getElementById('location-autocomplete-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        this.isVisible = false;
+        this.selectedIndex = -1;
+    },
+    
+    getOrCreateDropdown() {
+        let dropdown = document.getElementById('location-autocomplete-dropdown');
+        if (!dropdown) {
+            dropdown = document.createElement('div');
+            dropdown.id = 'location-autocomplete-dropdown';
+            dropdown.style.display = 'none';
+            document.body.appendChild(dropdown);
+        }
+        return dropdown;
+    },
+    
+    updateSelection() {
+        const dropdown = document.getElementById('location-autocomplete-dropdown');
+        if (!dropdown) return;
+        
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        items.forEach((item, index) => {
+            if (index === this.selectedIndex) {
+                item.style.backgroundColor = 'var(--button-active-bg)';
+            } else {
+                item.style.backgroundColor = 'transparent';
+            }
+        });
+    },
+    
+    selectSuggestion(index) {
+        if (index >= 0 && index < this.suggestions.length) {
+            const suggestion = this.suggestions[index];
+            const input = document.getElementById('settingsLocation');
+            if (input) {
+                input.value = suggestion.value;
+                this.hideSuggestions();
+                input.focus();
+            }
+        }
+    },
+    
+    handleKeyDown(e) {
+        if (!this.isVisible) return false;
+        
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                this.selectedIndex = Math.min(this.selectedIndex + 1, this.suggestions.length - 1);
+                this.updateSelection();
+                return true;
+                
+            case 'ArrowUp':
+                e.preventDefault();
+                this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
+                this.updateSelection();
+                return true;
+                
+            case 'Enter':
+                e.preventDefault();
+                if (this.selectedIndex >= 0) {
+                    this.selectSuggestion(this.selectedIndex);
+                } else if (this.suggestions.length > 0) {
+                    this.selectSuggestion(0);
+                }
+                return true;
+                
+            case 'Escape':
+                this.hideSuggestions();
+                return true;
+                
+            default:
+                return false;
+        }
+    }
+};
+
 // Enhanced app initialization
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('App initialized at:', new Date().toLocaleTimeString());
