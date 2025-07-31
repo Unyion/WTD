@@ -1846,27 +1846,102 @@ function showSettingsModal() {
     // IMPORTANT: Setup event listeners AFTER the modal is added to DOM
     setTimeout(() => {
         console.log('Setting up settings modal event listeners...');
-        setupSettingsModalEventListeners();
         
-        // Focus on the location input and verify it exists
+        // Get all the elements we need
+        const saveBtn = document.getElementById('saveSettingsBtn');
+        const cancelBtn = document.getElementById('cancelSettingsBtn');
+        const detectBtn = document.getElementById('detectLocationBtn');
         const locationInput = document.getElementById('settingsLocation');
-        console.log('Location input found after timeout:', !!locationInput);
+        const overlay = document.getElementById('settings-modal-overlay');
         
+        console.log('Found elements:', {
+            saveBtn: !!saveBtn,
+            cancelBtn: !!cancelBtn, 
+            detectBtn: !!detectBtn,
+            locationInput: !!locationInput,
+            overlay: !!overlay
+        });
+        
+        // Setup location input autocomplete DIRECTLY HERE
         if (locationInput) {
-            locationInput.focus();
-            // Clear the placeholder when focused
-            locationInput.addEventListener('focus', () => {
-                if (locationInput.placeholder === 'Start typing a city name...') {
-                    locationInput.placeholder = 'e.g. Denver,CO,US or leave blank for auto-detect';
+            console.log('Setting up autocomplete for location input DIRECTLY');
+            
+            // Input event for autocomplete
+            locationInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                console.log('Location input changed:', query);
+                
+                // Clear existing timeout
+                if (locationAutocomplete.searchTimeout) {
+                    clearTimeout(locationAutocomplete.searchTimeout);
                 }
+                
+                // Debounce the search to avoid too many API calls
+                locationAutocomplete.searchTimeout = setTimeout(() => {
+                    console.log('Searching for locations:', query);
+                    locationAutocomplete.searchLocations(query);
+                }, 300); // 300ms delay
             });
             
-            // Test that the input element is working
-            console.log('Location input value:', locationInput.value);
-            console.log('Location input placeholder:', locationInput.placeholder);
+            // Test the event listener immediately
+            console.log('Testing input event listener...');
+            locationInput.dispatchEvent(new Event('input'));
+            
+            console.log('Location input autocomplete setup complete');
         } else {
-            console.error('Location input still not found after timeout!');
+            console.error('Location input not found in timeout!');
         }
+        
+        // Setup other event listeners
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                saveSettings();
+            });
+        }
+        
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                closeSettingsModal();
+            });
+        }
+        
+        if (detectBtn) {
+            detectBtn.addEventListener('click', async () => {
+                const originalText = detectBtn.textContent;
+                
+                try {
+                    detectBtn.textContent = '🔄 Detecting...';
+                    detectBtn.disabled = true;
+                    
+                    locationAutocomplete.hideSuggestions();
+                    localStorage.removeItem('wtd-cached-location');
+                    localStorage.removeItem('wtd-cache-timestamp');
+                    
+                    const detectedLocation = await attemptAutoLocationDetection();
+                    
+                    if (detectedLocation) {
+                        locationInput.value = detectedLocation;
+                        showNotification('Location detected successfully!', 'success');
+                    } else {
+                        showNotification('Could not detect location automatically', 'warning');
+                    }
+                } catch (error) {
+                    console.error('Manual location detection failed:', error);
+                    showNotification('Location detection failed', 'error');
+                } finally {
+                    detectBtn.textContent = originalText;
+                    detectBtn.disabled = false;
+                }
+            });
+        }
+        
+        // Focus on the location input and verify it exists
+        if (locationInput) {
+            locationInput.focus();
+            console.log('Location input focused and ready');
+        }
+        
+        console.log('All event listeners set up directly in timeout');
         
         // Debug: Check if elements exist
         console.log('Settings modal opened, location input exists:', !!document.getElementById('settingsLocation'));
