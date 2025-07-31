@@ -1336,13 +1336,23 @@ function getUnavailabilityReason(activity, conditions) {
                 if (currentTime < sunriseTime || currentTime >= effectiveSunsetTime) {
                     const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                     const effectiveSunsetStr = new Date(effectiveSunsetTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr}, need time to complete before dark)`);
+                    
+                    // Check if we're in the "need time to complete" window (effective sunset to actual sunset)
+                    const isInPreSunsetWindow = currentTime >= effectiveSunsetTime && currentTime < sunsetTime;
+                    
+                    if (isInPreSunsetWindow) {
+                        // We're in the 1-hour window before sunset - mention completion time
+                        reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr}, need time to complete before dark)`);
+                    } else {
+                        // Either before sunrise or after actual sunset - just mention daylight hours
+                        reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr})`);
+                    }
                 }
             } else {
                 // Fallback message when sunrise/sunset not available
                 const currentHour = conditions.currentTime.getHours();
                 if (currentHour < 6 || currentHour >= 19) {
-                    reasons.push('Outside daylight hours (need time to complete before dark)');
+                    reasons.push('Outside daylight hours');
                 }
             }
         } else {
