@@ -63,34 +63,30 @@ const locationAutocomplete = {
         
         try {
             const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-            let url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${API_KEY}`;
+            let searchQuery = query;
+            
+            // Smart search logic: if query has space + short second word, search first word only
+            if (query.includes(' ')) {
+                const words = query.split(' ');
+                const firstWord = words[0].trim();
+                const secondWord = words[1] ? words[1].trim() : '';
+                
+                // If second word is less than 3 characters, search only the first word
+                if (secondWord.length < 3 && firstWord.length >= 2) {
+                    searchQuery = firstWord;
+                    console.log('Using smart search - searching for first word only:', searchQuery);
+                }
+            }
+            
+            const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(searchQuery)}&limit=8&appid=${API_KEY}`;
             
             console.log('Fetching from URL:', url);
-            let response = await fetch(url);
+            const response = await fetch(url);
             console.log('API response status:', response.status);
             
             if (response.ok) {
-                let locations = await response.json();
+                const locations = await response.json();
                 console.log('Raw API response:', locations);
-                
-                // If no results and query contains a space, try fallback search with first word only
-                if (locations.length === 0 && query.includes(' ')) {
-                    const firstWord = query.split(' ')[0].trim();
-                    console.log('No results found, trying fallback search with first word:', firstWord);
-                    
-                    // Only try fallback if first word is at least 2 characters
-                    if (firstWord.length >= 2) {
-                        const fallbackUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(firstWord)}&limit=8&appid=${API_KEY}`;
-                        console.log('Fallback URL:', fallbackUrl);
-                        
-                        const fallbackResponse = await fetch(fallbackUrl);
-                        if (fallbackResponse.ok) {
-                            const fallbackLocations = await fallbackResponse.json();
-                            console.log('Fallback API response:', fallbackLocations);
-                            locations = fallbackLocations; // Use fallback results
-                        }
-                    }
-                }
                 
                 // Format locations for display
                 this.suggestions = locations.map(location => {
