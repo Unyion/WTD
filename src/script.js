@@ -63,15 +63,34 @@ const locationAutocomplete = {
         
         try {
             const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
-            const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${API_KEY}`;
+            let url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${API_KEY}`;
             
             console.log('Fetching from URL:', url);
-            const response = await fetch(url);
+            let response = await fetch(url);
             console.log('API response status:', response.status);
             
             if (response.ok) {
-                const locations = await response.json();
+                let locations = await response.json();
                 console.log('Raw API response:', locations);
+                
+                // If no results and query contains a space, try fallback search with first word only
+                if (locations.length === 0 && query.includes(' ')) {
+                    const firstWord = query.split(' ')[0].trim();
+                    console.log('No results found, trying fallback search with first word:', firstWord);
+                    
+                    // Only try fallback if first word is at least 2 characters
+                    if (firstWord.length >= 2) {
+                        const fallbackUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(firstWord)}&limit=8&appid=${API_KEY}`;
+                        console.log('Fallback URL:', fallbackUrl);
+                        
+                        const fallbackResponse = await fetch(fallbackUrl);
+                        if (fallbackResponse.ok) {
+                            const fallbackLocations = await fallbackResponse.json();
+                            console.log('Fallback API response:', fallbackLocations);
+                            locations = fallbackLocations; // Use fallback results
+                        }
+                    }
+                }
                 
                 // Format locations for display
                 this.suggestions = locations.map(location => {
