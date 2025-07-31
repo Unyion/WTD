@@ -1935,6 +1935,44 @@ function showSettingsModal() {
             });
         }
         
+        // Close on overlay click
+        if (overlay) {
+            overlay.addEventListener('click', (e) => {
+                if (e.target.id === 'settings-modal-overlay') {
+                    closeSettingsModal();
+                }
+            });
+        }
+        
+        // Close on escape key - with autocomplete awareness
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                console.log('Escape key pressed, autocomplete visible:', locationAutocomplete.isVisible);
+                // First try to close autocomplete dropdown
+                if (locationAutocomplete.isVisible) {
+                    locationAutocomplete.hideSuggestions();
+                } else {
+                    // If no dropdown, close modal
+                    console.log('Closing settings modal via Escape key');
+                    closeSettingsModal();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        console.log('Escape key handler added');
+        
+        // Enter key to save (when not in autocomplete)
+        const handleEnter = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !locationAutocomplete.isVisible) {
+                e.preventDefault();
+                console.log('Enter key pressed, saving settings');
+                saveSettings();
+            }
+        };
+        document.addEventListener('keydown', handleEnter);
+        console.log('Enter key handler added');
+        
         // Focus on the location input and verify it exists
         if (locationInput) {
             locationInput.focus();
