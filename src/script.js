@@ -53,7 +53,10 @@ const locationAutocomplete = {
     searchTimeout: null,
     
     async searchLocations(query) {
+        console.log('searchLocations called with query:', query);
+        
         if (query.length < 2) {
+            console.log('Query too short, hiding suggestions');
             this.hideSuggestions();
             return;
         }
@@ -62,9 +65,13 @@ const locationAutocomplete = {
             const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
             const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${API_KEY}`;
             
+            console.log('Fetching from URL:', url);
             const response = await fetch(url);
+            console.log('API response status:', response.status);
+            
             if (response.ok) {
                 const locations = await response.json();
+                console.log('Raw API response:', locations);
                 
                 // Format locations for display
                 this.suggestions = locations.map(location => {
@@ -89,7 +96,11 @@ const locationAutocomplete = {
                     };
                 });
                 
+                console.log('Formatted suggestions:', this.suggestions);
                 this.showSuggestions();
+            } else {
+                console.error('API request failed with status:', response.status);
+                this.hideSuggestions();
             }
         } catch (error) {
             console.error('Location search error:', error);
@@ -1716,16 +1727,17 @@ function showSettingsModal() {
         max-width: 500px;
         color: var(--fg-light);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        position: relative;
     `;
     
     modal.innerHTML = `
         <h2 style="color: var(--accent); margin-bottom: 20px; font-size: 18px; text-align: center;">Settings</h2>
         
         <!-- Location Setting -->
-        <div style="margin-bottom: 20px;">
+        <div style="margin-bottom: 20px; position: relative;">
             <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 5px;">
-                <input type="text" id="settingsLocation" placeholder="e.g. Denver,CO,US or leave blank for auto-detect" style="
+            <div style="display: flex; gap: 8px; margin-bottom: 5px; position: relative;">
+                <input type="text" id="settingsLocation" placeholder="Start typing a city name..." style="
                     flex: 1;
                     background-color: var(--input-bg);
                     color: var(--fg-light);
@@ -1734,7 +1746,9 @@ function showSettingsModal() {
                     font-size: 12px;
                     border-radius: 3px;
                     outline: none;
-                " value="${currentLocation}">
+                    position: relative;
+                    z-index: 1;
+                " value="${currentLocation}" autocomplete="off">
                 <button id="detectLocationBtn" style="
                     background-color: var(--accent);
                     color: white;
@@ -1829,12 +1843,26 @@ function showSettingsModal() {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     
-    // Setup event listeners including the new detect button
-    setupSettingsModalEventListeners();
-    
-    // Focus on the location input
-    const locationInput = document.getElementById('settingsLocation');
-    locationInput.focus();
+    // IMPORTANT: Setup event listeners AFTER the modal is added to DOM
+    setTimeout(() => {
+        setupSettingsModalEventListeners();
+        
+        // Focus on the location input
+        const locationInput = document.getElementById('settingsLocation');
+        if (locationInput) {
+            locationInput.focus();
+            // Clear the placeholder when focused
+            locationInput.addEventListener('focus', () => {
+                if (locationInput.placeholder === 'Start typing a city name...') {
+                    locationInput.placeholder = 'e.g. Denver,CO,US or leave blank for auto-detect';
+                }
+            });
+        }
+        
+        // Debug: Check if elements exist
+        console.log('Settings modal opened, location input exists:', !!document.getElementById('settingsLocation'));
+        console.log('Location autocomplete object:', locationAutocomplete);
+    }, 10);
 }
 
 // Setup event listeners for settings modal
