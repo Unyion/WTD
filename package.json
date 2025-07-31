@@ -1,6 +1,6 @@
 {
   "name": "wtd-app",
-  "version": "1.0.2",
+  "version": "1.0.1",
   "description": "What To Do - Activity suggestion app based on weather and preferences",
   "main": "main.js",
   "scripts": {
