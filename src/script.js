@@ -1264,8 +1264,8 @@ function isActivityAvailable(activity, conditions) {
                 const sunriseTime = window.sunriseTime.getTime();
                 const sunsetTime = window.sunsetTime.getTime();
                 
-                // Stop daylight activities 1 hour before sunset to allow completion
-                const effectiveSunsetTime = sunsetTime - (60 * 60 * 1000); // 1 hour before sunset
+                // Stop daylight activities 30 minutes before sunset to allow completion
+                const effectiveSunsetTime = sunsetTime - (30 * 60 * 1000); // 30 minutes before sunset
                 
                 if (currentTime < sunriseTime || currentTime >= effectiveSunsetTime) {
                     return false;
@@ -1330,22 +1330,22 @@ function getUnavailabilityReason(activity, conditions) {
                 const sunriseTime = window.sunriseTime.getTime();
                 const sunsetTime = window.sunsetTime.getTime();
                 
-                // Stop daylight activities 1 hour before sunset
-                const effectiveSunsetTime = sunsetTime - (60 * 60 * 1000);
+                // Stop daylight activities 30 minutes before sunset (changed from 1 hour)
+                const effectiveSunsetTime = sunsetTime - (30 * 60 * 1000); // 30 minutes before sunset
                 
                 if (currentTime < sunriseTime || currentTime >= effectiveSunsetTime) {
                     const sunriseStr = window.sunriseTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    const effectiveSunsetStr = new Date(effectiveSunsetTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    const actualSunsetStr = window.sunsetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); // Show actual sunset time
                     
                     // Check if we're in the "need time to complete" window (effective sunset to actual sunset)
                     const isInPreSunsetWindow = currentTime >= effectiveSunsetTime && currentTime < sunsetTime;
                     
                     if (isInPreSunsetWindow) {
-                        // We're in the 1-hour window before sunset - mention completion time
-                        reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr}, need time to complete before dark)`);
+                        // We're in the 30-minute window before sunset - mention completion time
+                        reasons.push(`Outside daylight hours (${sunriseStr} - ${actualSunsetStr}, need time to complete before dark)`);
                     } else {
                         // Either before sunrise or after actual sunset - just mention daylight hours
-                        reasons.push(`Outside daylight hours (${sunriseStr} - ${effectiveSunsetStr})`);
+                        reasons.push(`Outside daylight hours (${sunriseStr} - ${actualSunsetStr})`);
                     }
                 }
             } else {
