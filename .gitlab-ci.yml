@@ -94,39 +94,28 @@ create_release:
       
       ### Platform Downloads:
       
-      **🍎 macOS** 
-      - Download the `.dmg` file from the artifacts below
+      **macOS**
+      - Download the `.dmg` file from the Packages above
       - Open the DMG and drag to Applications folder
+      - Trust the certificate in System Settings if necessary
       
-      **🪟 Windows**
-      - Download the `.exe` installer from the artifacts below  
+      **Windows**
+      - Download the `.exe` installer from the Packages above  
       - Run the installer and follow the prompts
       
-      **🐧 Linux**
-      - **AppImage**: Download `.AppImage`, make executable, and run
+      **Linux**
+      - **AppImage**: Download `.AppImage` from the Packages above, make executable, and run
       - **Package Managers**: Download `.deb` (Ubuntu/Debian) or `.rpm` (Fedora/CentOS)
-      
-      ### What's New:
-      - ✨ Initial release with weather-based activity suggestions
-      - 🌍 Location auto-detection with smart fallback search
-      - 🌦️ Activity filtering by weather, season, and time constraints
-      - 🌅 Smart daylight detection with 30-minute sunset buffer
-      - ⚡ Rate-limited weather updates to prevent API spam
-      - 🎨 Dark/Light theme support with system detection
-      - 📱 Random suggestion headers for engaging user experience
-      
-      ### Installation:
-      All platforms include the same features and functionality. Choose the format that works best for your system!
     tag_name: $CI_COMMIT_TAG
     assets:
       links:
-        - name: '🍎 macOS Downloads (.dmg)'
+        - name: 'macOS Download (.dmg)'
           url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_macos'
           link_type: 'package'
-        - name: '🪟 Windows Downloads (.exe)'
+        - name: 'Windows Download (.exe)'
           url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_windows'
           link_type: 'package'
-        - name: '🐧 Linux Downloads (.AppImage, .deb, .rpm)'
+        - name: 'Linux Download (.AppImage, .deb, .rpm)'
           url: '$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/dist/?job=build_linux'
           link_type: 'package'
         - name: '📦 All Platforms (Combined Download)'
