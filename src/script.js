@@ -17,6 +17,34 @@ const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
 const settingsButton = document.getElementById('settingsButton');
 
+// Weather rate limiting
+const weatherRateLimit = {
+    requests: [],
+    maxRequests: 3,
+    timeWindow: 60 * 1000, // 1 minute in milliseconds
+    
+    canMakeRequest() {
+        const now = Date.now();
+        // Remove requests older than the time window
+        this.requests = this.requests.filter(timestamp => now - timestamp < this.timeWindow);
+        
+        // Check if we can make a new request
+        if (this.requests.length < this.maxRequests) {
+            this.requests.push(now);
+            return true;
+        }
+        return false;
+    },
+    
+    getTimeUntilNextRequest() {
+        if (this.requests.length < this.maxRequests) return 0;
+        
+        const oldestRequest = Math.min(...this.requests);
+        const timeUntilReset = this.timeWindow - (Date.now() - oldestRequest);
+        return Math.max(0, Math.ceil(timeUntilReset / 1000)); // Return seconds
+    }
+};
+
 // Enhanced app initialization
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('App initialized at:', new Date().toLocaleTimeString());
@@ -42,12 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add a small delay to let the UI render first
     setTimeout(async () => {
         await updateWeather();
-        
-        // Set up auto-refresh interval (5 minutes in production, 2 minutes for testing)
-        setInterval(() => {
-            console.log('Auto weather refresh at:', new Date().toLocaleTimeString());
-            updateWeather();
-        }, 5 * 60 * 1000); // 5 minutes
+        // Note: No auto-refresh interval - only manual updates and startup
     }, 500);
 });
 
@@ -64,20 +87,68 @@ function setupEventListeners() {
     addActivityButton.addEventListener('click', addActivity);
     tellMeWhatToDoButton.addEventListener('click', suggestActivity);
     
-    // Add click listener to weather display for manual refresh or settings
+    // Enhanced weather display click listener with rate limiting
     weatherDisplay.addEventListener('click', () => {
         const weatherText = weatherDisplay.textContent;
         if (weatherText.includes('Location not found') || weatherText.includes('Unable to get location') || weatherText.includes('Click to set')) {
             console.log('Location not found - opening settings');
             showSettingsModal();
         } else {
+            // Check rate limiting
+            if (!weatherRateLimit.canMakeRequest()) {
+                const waitTime = weatherRateLimit.getTimeUntilNextRequest();
+                showNotification(`Please wait ${waitTime} seconds before refreshing weather again`, 'warning');
+                return;
+            }
+            
             console.log('Manual weather refresh requested');
             weatherDisplay.textContent = '🔄 Refreshing...';
             updateWeather();
         }
     });
+    
+    // Enhanced weather display hover for tooltip
+    let hoverTimeout;
+    weatherDisplay.addEventListener('mouseenter', (e) => {
+        // Only show tooltip if weather has been loaded successfully
+        const weatherText = weatherDisplay.textContent;
+        if (!weatherText.includes('🔄') && !weatherText.includes('📍') && !weatherText.includes('❌') && !weatherText.includes('⏱️') && !weatherText.includes('🌐')) {
+            const lastUpdated = localStorage.getItem('wtd-weather-last-updated');
+            if (lastUpdated) {
+                const minutesAgo = Math.floor((Date.now() - parseInt(lastUpdated)) / (1000 * 60));
+                let timeText;
+                if (minutesAgo === 0) {
+                    timeText = 'just now';
+                } else if (minutesAgo === 1) {
+                    timeText = '1 minute ago';
+                } else if (minutesAgo < 60) {
+                    timeText = `${minutesAgo} minutes ago`;
+                } else {
+                    const hoursAgo = Math.floor(minutesAgo / 60);
+                    if (hoursAgo === 1) {
+                        timeText = '1 hour ago';
+                    } else {
+                        timeText = `${hoursAgo} hours ago`;
+                    }
+                }
+                
+                hoverTimeout = setTimeout(() => {
+                    showTooltip(e, `Last updated ${timeText}. Click to refresh.`);
+                }, 500); // Small delay before showing tooltip
+            }
+        }
+    });
+    
+    weatherDisplay.addEventListener('mouseleave', () => {
+        clearTimeout(hoverTimeout);
+        hideTooltip();
+    });
+    
+    weatherDisplay.addEventListener('mousemove', (e) => {
+        updateTooltipPosition(e);
+    });
+    
     weatherDisplay.style.cursor = 'pointer';
-    weatherDisplay.title = 'Click to refresh weather';
     
     // Settings button click
     if (settingsButton) {
@@ -342,7 +413,6 @@ async function updateWeather() {
             weatherDisplay.textContent = '📍 Click to set location';
             weatherDisplay.style.cursor = 'pointer';
             weatherDisplay.style.color = '#ff9800'; // Orange warning color
-            weatherDisplay.title = 'Click to set your location manually';
             
             // Disable "Tell Me What To Do" button
             updateTellMeWhatToDoButton(false);
@@ -439,7 +509,9 @@ async function updateWeather() {
             weatherDisplay.textContent = weatherText;
             weatherDisplay.style.color = 'var(--fg-muted)';
             weatherDisplay.style.cursor = 'pointer';
-            weatherDisplay.title = 'Click to refresh weather or change location';
+            
+            // Store the timestamp when weather was last updated
+            localStorage.setItem('wtd-weather-last-updated', Date.now().toString());
             
             // Enable "Tell Me What To Do" button
             updateTellMeWhatToDoButton(true);
@@ -489,7 +561,6 @@ async function updateWeather() {
         
         weatherDisplay.style.color = '#ff6b6b';
         weatherDisplay.style.cursor = 'pointer';
-        weatherDisplay.title = 'Click to retry or set location manually';
         
         // Disable "Tell Me What To Do" button on error
         updateTellMeWhatToDoButton(false);
