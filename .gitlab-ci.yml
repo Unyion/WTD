@@ -10,7 +10,7 @@ build_macos:
   stage: build
   tags:
     - saas-macos-medium-m1  # GitLab Ultimate macOS runner
-  image: macos-13-xcode-15
+  image: macos-14-xcode-15  # Updated to use allowed image
   script:
     - echo "Building for macOS..."
     - node --version
