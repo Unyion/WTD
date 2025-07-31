@@ -1845,10 +1845,13 @@ function showSettingsModal() {
     
     // IMPORTANT: Setup event listeners AFTER the modal is added to DOM
     setTimeout(() => {
+        console.log('Setting up settings modal event listeners...');
         setupSettingsModalEventListeners();
         
-        // Focus on the location input
+        // Focus on the location input and verify it exists
         const locationInput = document.getElementById('settingsLocation');
+        console.log('Location input found after timeout:', !!locationInput);
+        
         if (locationInput) {
             locationInput.focus();
             // Clear the placeholder when focused
@@ -1857,12 +1860,18 @@ function showSettingsModal() {
                     locationInput.placeholder = 'e.g. Denver,CO,US or leave blank for auto-detect';
                 }
             });
+            
+            // Test that the input element is working
+            console.log('Location input value:', locationInput.value);
+            console.log('Location input placeholder:', locationInput.placeholder);
+        } else {
+            console.error('Location input still not found after timeout!');
         }
         
         // Debug: Check if elements exist
         console.log('Settings modal opened, location input exists:', !!document.getElementById('settingsLocation'));
         console.log('Location autocomplete object:', locationAutocomplete);
-    }, 10);
+    }, 100); // Increased timeout to 100ms
 }
 
 // Setup event listeners for settings modal
