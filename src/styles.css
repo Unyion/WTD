@@ -15,30 +15,30 @@
 /* Light theme */
 [data-theme="light"] {
     --bg-dark: #FFFFFF;
-    --fg-light: #212121;
-    --fg-muted: #666666;
+    --fg-light: #1a1a1a;
+    --fg-muted: #4a4a4a;
     --accent: #4CAF50;
-    --button-bg: #F5F5F5;
-    --button-active-bg: #E0E0E0;
-    --separator: #CCCCCC;
+    --button-bg: #f0f0f0;
+    --button-active-bg: #d5d5d5;
+    --separator: #bdbdbd;
     --wtd-button-bg: #4CAF50;
     --wtd-button-active-bg: #45a049;
-    --input-bg: #F8F8F8;
+    --input-bg: #f8f8f8;
 }
 
 /* Auto theme detection */
 @media (prefers-color-scheme: light) {
     [data-theme="auto"] {
         --bg-dark: #FFFFFF;
-        --fg-light: #212121;
-        --fg-muted: #666666;
+        --fg-light: #1a1a1a;
+        --fg-muted: #4a4a4a;
         --accent: #4CAF50;
-        --button-bg: #F5F5F5;
-        --button-active-bg: #E0E0E0;
-        --separator: #CCCCCC;
+        --button-bg: #f0f0f0;
+        --button-active-bg: #d5d5d5;
+        --separator: #bdbdbd;
         --wtd-button-bg: #4CAF50;
         --wtd-button-active-bg: #45a049;
-        --input-bg: #F8F8F8;
+        --input-bg: #f8f8f8;
     }
 }
 
