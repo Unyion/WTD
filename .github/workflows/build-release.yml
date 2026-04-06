@@ -20,25 +20,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       
-      - name: Build app
+      - name: Build and publish app
         run: npm run build
-      
-      - name: Upload release assets (macOS)
-        if: runner.os == 'macOS'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist/*.dmg
-            dist/*.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload release assets (Windows)
-        if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist/*.exe
-            dist/*.msi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
