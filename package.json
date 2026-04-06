@@ -21,10 +21,10 @@
     "productName": "What To Do",
     "directories": {
       "output": "dist"
+    },
       "publish": {
       "provider": "github",
       "releaseType": "release"
-    },
     },
     "files": [
       "src/**/*",
