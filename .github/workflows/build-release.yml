@@ -33,6 +33,17 @@ jobs:
           node-version: '20'
           cache: npm
 
+      - name: Sync app version to tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version.StartsWith('v')) {
+            $version = $version.Substring(1)
+          }
+
+          npm version $version --no-git-tag-version --allow-same-version
+
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
         run: |
@@ -64,15 +75,67 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
 
+      - name: Generate release summary
+        shell: bash
+        run: |
+          current_tag="${GITHUB_REF_NAME}"
+          previous_tag="$(git tag --sort=-version:refname | grep -Fxv "$current_tag" | head -n 1 || true)"
+
+          if [ -n "$previous_tag" ]; then
+            range="$previous_tag..$current_tag"
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${current_tag}"
+            changes_intro="Changes since ${previous_tag}."
+          else
+            range="$current_tag"
+            compare_url=""
+            changes_intro="Initial GitHub release for this repository."
+          fi
+
+          {
+            echo "## ${current_tag} - Release Summary"
+            echo
+            echo "### What's New"
+            echo "- ${changes_intro}"
+            echo "- This release includes the changes listed below and updated installers for supported platforms."
+            echo
+            echo "### Changes"
+            git log --pretty=format:'- %s (%h)' "$range" || true
+            echo
+            if [ -n "$compare_url" ]; then
+              echo
+              echo "### Full Changelog"
+              echo "- ${compare_url}"
+            fi
+            echo
+            echo "### Downloads"
+            echo "- Installers for Windows (.exe), macOS (.dmg), and Linux (.AppImage, .deb, .rpm) are attached below."
+            echo
+            echo "### System Requirements"
+            echo "- Windows 10+"
+            echo "- macOS 10.13+"
+            echo "- Modern 64-bit Linux distribution"
+            echo
+            echo "### Known Issues"
+            echo "- macOS builds may require manual trust on first launch because the app is not notarized."
+          } > release-notes.md
+
       - name: Create release and upload installers
         uses: softprops/action-gh-release@v2
         with:
+          name: What To Do ${{ github.ref_name }}
+          body_path: release-notes.md
           generate_release_notes: true
           files: |
             release-assets/*.dmg
