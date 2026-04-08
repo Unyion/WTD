@@ -26,6 +26,7 @@ A smart activity suggestion app that picks a random activity from your saved act
 1. Download the `.AppImage` file from the [latest release](../../releases)
 2. Make it executable: `chmod +x What-To-Do-*.AppImage`
 3. Run it: `./What-To-Do-*.AppImage`
+4. Or install the `.deb` or `.rpm` package if you prefer a native package manager install
 
 ### First Time Setup
 1. **Location**: The app will try to auto-detect your location. If it fails, click the weather area to set it manually
@@ -65,12 +66,14 @@ npm run dist
 ```
 wtd-app/
 ├── main.js              # Electron main process
+├── .github/
+│   └── workflows/
+│       └── build-release.yml  # GitHub Actions build and release pipeline
 ├── src/
 │   ├── index.html       # Main UI
 │   ├── script.js        # Application logic
 │   └── styles.css       # Styling and themes
 ├── package.json         # Dependencies and build config
-└── .gitlab-ci.yml       # CI/CD pipeline
 ```
 
 ### Technologies Used
@@ -78,7 +81,15 @@ wtd-app/
 - **Vanilla JavaScript**: No frameworks, pure JS
 - **OpenWeatherMap API**: Weather data and geocoding
 - **CSS Custom Properties**: Theme system
-- **GitLab CI/CD**: Automated builds and releases
+- **GitHub Actions**: Automated builds and releases
+
+### Releases
+Push a git tag to build and publish installers for macOS, Windows, and Linux:
+
+```bash
+git tag v1.0.2
+git push origin v1.0.2
+```
 
 ## 🤝 Contributing
 

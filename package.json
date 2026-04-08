@@ -22,10 +22,6 @@
     "directories": {
       "output": "dist"
     },
-      "publish": {
-      "provider": "github",
-      "releaseType": "release"
-    },
     "files": [
       "src/**/*",
       "main.js",
@@ -38,7 +34,11 @@
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ]
     }
   }
 }
