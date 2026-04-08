@@ -10,7 +10,10 @@
     "dist": "electron-builder --publish=never"
   },
   "keywords": ["activity", "weather", "recommendation", "desktop"],
-  "author": "Jackson Bigelow",
+  "author": {
+    "name": "Jackson Bigelow",
+    "email": "273222488+Unyion@users.noreply.github.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
@@ -34,6 +37,7 @@
       "target": "nsis"
     },
     "linux": {
+      "category": "Utility",
       "target": [
         "AppImage",
         "deb",
