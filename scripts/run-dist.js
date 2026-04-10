@@ -44,7 +44,20 @@ const cliArgs = [
 
 console.log(`Building installers with version ${buildVersion}`);
 
-const result = spawnSync(builderBin, cliArgs, {
+function quoteWindowsArg(arg) {
+  if (!/[\s"]/u.test(arg)) {
+    return arg;
+  }
+
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
+
+const spawnCommand = process.platform === 'win32' ? 'cmd.exe' : builderBin;
+const spawnArgs = process.platform === 'win32'
+  ? ['/d', '/s', '/c', [builderBin, ...cliArgs].map(quoteWindowsArg).join(' ')]
+  : cliArgs;
+
+const result = spawnSync(spawnCommand, spawnArgs, {
   cwd: projectRoot,
   stdio: 'inherit',
   shell: false

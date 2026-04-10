@@ -1,6 +1,6 @@
 {
   "name": "wtd-app",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "What To Do - Activity suggestion app based on weather and preferences",
   "main": "main.js",
   "homepage": "https://github.com/Unyion/WTD",
