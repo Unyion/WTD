@@ -1,13 +1,18 @@
 {
   "name": "wtd-app",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "description": "What To Do - Activity suggestion app based on weather and preferences",
   "main": "main.js",
+  "homepage": "https://github.com/Unyion/WTD",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Unyion/WTD.git"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "dist": "electron-builder --publish=never"
+    "dist": "node scripts/run-dist.js"
   },
   "keywords": ["activity", "weather", "recommendation", "desktop"],
   "author": {
@@ -35,6 +40,16 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "What To Do",
+      "menuCategory": "What To Do",
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
     },
     "linux": {
       "category": "Utility",
