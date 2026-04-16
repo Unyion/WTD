@@ -16,6 +16,8 @@ const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
 const settingsButton = document.getElementById('settingsButton');
+const { version: appVersion, name: appName } = require('../package.json');
+const updateRepoUrl = 'https://github.com/Unyion/WTD/releases/latest';
 
 // Weather rate limiting
 const weatherRateLimit = {
@@ -293,6 +295,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Show initial loading state
     weatherDisplay.textContent = '🔄 Starting up...';
     
+    // One-time update opt-in prompt on first launch
+    await showAutoUpdatePromptIfNeeded();
+
+    // Check for updates when the app starts
+    await checkForUpdates({ showStatus: true });
+
     // Initialize weather with auto-detection
     console.log('Initializing location detection...');
     
@@ -396,6 +404,202 @@ function setupEventListeners() {
             addActivity();
         }
     });
+}
+
+function isVersionNewer(latest, current) {
+    const parse = (version) => version.replace(/^v/, '').split('.').map(num => parseInt(num, 10) || 0);
+    const latestParts = parse(latest);
+    const currentParts = parse(current);
+    for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
+        const latestValue = latestParts[i] || 0;
+        const currentValue = currentParts[i] || 0;
+        if (latestValue > currentValue) return true;
+        if (latestValue < currentValue) return false;
+    }
+    return false;
+}
+
+async function showAutoUpdatePromptIfNeeded() {
+    const hasPrompted = localStorage.getItem('wtd-update-prompt-shown');
+    if (hasPrompted) return;
+
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'update-optin-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        `;
+
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background-color: var(--bg-dark);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 28px;
+            max-width: 420px;
+            width: 100%;
+            color: var(--fg-light);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+            font-size: 13px;
+            position: relative;
+        `;
+
+        modal.innerHTML = `
+            <h2 style="color: var(--accent); margin-bottom: 16px; font-size: 20px; text-align: center;">Enable Auto Updates?</h2>
+            <p style="margin-bottom: 16px; color: var(--fg-muted); line-height: 1.5;">This app can automatically check for updates when it starts. Enabling auto updates helps you stay on the latest version without having to manually check.</p>
+            <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 18px; cursor: pointer;">
+                <input id="startupAutoUpdateCheckbox" type="checkbox" checked style="width: 16px; height: 16px;">
+                Enable auto updates on startup
+            </label>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                <button id="enableAutoUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Enable</button>
+                <button id="skipAutoUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Skip</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const checkbox = document.getElementById('startupAutoUpdateCheckbox');
+        const enableBtn = document.getElementById('enableAutoUpdateBtn');
+        const skipBtn = document.getElementById('skipAutoUpdateBtn');
+
+        const close = () => {
+            localStorage.setItem('wtd-update-prompt-shown', 'true');
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            resolve();
+        };
+
+        enableBtn.addEventListener('click', () => {
+            const enabled = checkbox.checked;
+            localStorage.setItem('wtd-auto-update-enabled', enabled ? 'true' : 'false');
+            showNotification('Auto updates enabled. Checking now...', 'success');
+            close();
+        });
+
+        skipBtn.addEventListener('click', () => {
+            localStorage.setItem('wtd-auto-update-enabled', 'false');
+            close();
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                localStorage.setItem('wtd-auto-update-enabled', 'false');
+                close();
+            }
+        });
+    });
+}
+
+function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
+    const overlay = document.createElement('div');
+    overlay.id = 'update-available-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.75);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 12px;
+        padding: 28px;
+        max-width: 520px;
+        width: 100%;
+        color: var(--fg-light);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+    `;
+
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 14px; font-size: 20px; text-align: center;">Update Available</h2>
+        <p style="margin-bottom: 12px; color: var(--fg-light);">A newer version of ${appName} is available:</p>
+        <p style="margin-bottom: 10px; font-weight: 700;">Current: ${appVersion} — Latest: ${latestVersion}</p>
+        <div style="margin-bottom: 16px; color: var(--fg-muted); line-height: 1.5; max-height: 220px; overflow-y: auto; border: 1px solid var(--button-bg); padding: 12px; border-radius: 6px; background-color: var(--input-bg);">${releaseNotes || 'Release notes not available.'}</div>
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
+            <button id="openReleasePageBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Open Release Page</button>
+            <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Dismiss</button>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    document.getElementById('openReleasePageBtn').addEventListener('click', () => {
+        window.open(releaseUrl, '_blank');
+    });
+    document.getElementById('dismissUpdateBtn').addEventListener('click', () => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    });
+}
+
+async function checkForUpdates({ showStatus = false } = {}) {
+    const autoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
+    if (showStatus) {
+        weatherDisplay.textContent = '🔄 Checking for updates...';
+    }
+
+    try {
+        const response = await fetch('https://api.github.com/repos/Unyion/WTD/releases/latest', {
+            headers: {
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': `${appName}/${appVersion}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Update check failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const latestTag = data.tag_name || data.name || '';
+        const latestVersion = latestTag.replace(/^v/, '');
+        const releaseNotes = data.body || '';
+        const releaseUrl = data.html_url || updateRepoUrl;
+
+        if (isVersionNewer(latestVersion, appVersion)) {
+            showNotification(`Update available: ${latestVersion}`, 'success');
+            if (autoUpdateEnabled) {
+                showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl);
+            } else if (showStatus) {
+                showNotification('Update available. Enable auto updates in settings for prompts.', 'info');
+            }
+        } else if (showStatus) {
+            showNotification('You are running the latest version.', 'success');
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+        if (showStatus) {
+            showNotification('Unable to check for updates.', 'warning');
+        }
+    } finally {
+        if (showStatus) {
+            // Reset weather text when done only if it was the status update
+            setTimeout(() => {
+                if (weatherDisplay.textContent.includes('Checking for updates')) {
+                    weatherDisplay.textContent = '🔄 Starting up...';
+                }
+            }, 1200);
+        }
+    }
 }
 
 // Enhanced getUserLocation function with auto-detection
@@ -1746,6 +1950,7 @@ function showSettingsModal() {
     const currentTimeFormat = localStorage.getItem('wtd-time-format') || '24hr';
     const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
     const currentTheme = localStorage.getItem('wtd-theme') || 'auto';
+    const currentAutoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
     
     // Get current time for examples
     const now = new Date();
@@ -1842,7 +2047,7 @@ function showSettingsModal() {
         <!-- Theme Setting -->
         <div style="margin-bottom: 20px;">
             <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Theme:</label>
-            <div style="display: flex; gap: 15px;">
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                 <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px;">
                     <input type="radio" name="theme" value="light" ${currentTheme === 'light' ? 'checked' : ''} style="margin-right: 8px;">
                     ☀️ Light
@@ -1855,6 +2060,17 @@ function showSettingsModal() {
                     <input type="radio" name="theme" value="auto" ${currentTheme === 'auto' ? 'checked' : ''} style="margin-right: 8px;">
                     🔄 Auto (System)
                 </label>
+            </div>
+        </div>
+
+        <!-- Auto Update Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px;">
+                <input id="settingsAutoUpdate" type="checkbox" ${currentAutoUpdateEnabled ? 'checked' : ''} style="width: 16px; height: 16px;">
+                Enable auto updates on startup
+            </label>
+            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 8px; line-height: 1.4;">
+                The app will check for updates when it launches and notify you if a newer version is available.
             </div>
         </div>
 
@@ -2132,6 +2348,7 @@ function saveSettings() {
     const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
     const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
     const theme = document.querySelector('input[name="theme"]:checked').value;
+    const autoUpdateEnabled = document.getElementById('settingsAutoUpdate')?.checked === true;
     
     // Save to localStorage
     if (location) {
@@ -2142,8 +2359,9 @@ function saveSettings() {
     
     localStorage.setItem('wtd-time-format', timeFormat);
     localStorage.setItem('wtd-temp-unit', tempUnit);
+    localStorage.setItem('wtd-auto-update-enabled', autoUpdateEnabled ? 'true' : 'false');
     
-    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme });
+    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme, autoUpdateEnabled });
     
     // Apply theme immediately
     setTheme(theme);
@@ -2156,6 +2374,11 @@ function saveSettings() {
     
     // Refresh weather with new settings
     updateWeather();
+
+    // Check for updates if auto-update was changed
+    if (autoUpdateEnabled) {
+        checkForUpdates({ showStatus: true });
+    }
     
     // Show success notification
     showNotification('Settings saved successfully!', 'success');
