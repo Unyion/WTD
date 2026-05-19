@@ -19,6 +19,27 @@ const settingsButton = document.getElementById('settingsButton');
 const { version: appVersion, name: appName } = require('../package.json');
 const updateRepoUrl = 'https://github.com/Unyion/WTD/releases/latest';
 
+// Weather forecast caching
+const weatherForecast = {
+    data: [],
+    lastFetchTime: 0,
+    cacheExpiry: 30 * 60 * 1000, // 30 minutes in milliseconds
+    
+    isCacheValid() {
+        return this.lastFetchTime && (Date.now() - this.lastFetchTime) < this.cacheExpiry;
+    },
+    
+    setData(forecastData) {
+        this.data = forecastData;
+        this.lastFetchTime = Date.now();
+    },
+    
+    clearCache() {
+        this.data = [];
+        this.lastFetchTime = 0;
+    }
+};
+
 // Weather rate limiting
 const weatherRateLimit = {
     requests: [],
@@ -298,8 +319,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // One-time update opt-in prompt on first launch
     await showAutoUpdatePromptIfNeeded();
 
-    // Check for updates when the app starts
-    await checkForUpdates({ showStatus: true });
+    const autoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
+    if (autoUpdateEnabled) {
+        await checkForUpdates({ showStatus: false });
+    }
 
     // Initialize weather with auto-detection
     console.log('Initializing location detection...');
@@ -455,23 +478,18 @@ async function showAutoUpdatePromptIfNeeded() {
 
         modal.innerHTML = `
             <h2 style="color: var(--accent); margin-bottom: 16px; font-size: 20px; text-align: center;">Enable Auto Updates?</h2>
-            <p style="margin-bottom: 16px; color: var(--fg-muted); line-height: 1.5;">This app can automatically check for updates when it starts. Enabling auto updates helps you stay on the latest version without having to manually check.</p>
-            <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 18px; cursor: pointer;">
-                <input id="startupAutoUpdateCheckbox" type="checkbox" checked style="width: 16px; height: 16px;">
-                Enable auto updates on startup
-            </label>
-            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
-                <button id="enableAutoUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Enable</button>
-                <button id="skipAutoUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Skip</button>
+            <p style="margin-bottom: 16px; color: var(--fg-muted); line-height: 1.5;">Should What To Do automatically check for updates when it starts? You can also check manually from Settings anytime.</p>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap;">
+                <button id="allowAutoUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; min-width: 130px;">Enable auto updates</button>
+                <button id="declineAutoUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; min-width: 130px;">No thanks</button>
             </div>
         `;
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
-        const checkbox = document.getElementById('startupAutoUpdateCheckbox');
-        const enableBtn = document.getElementById('enableAutoUpdateBtn');
-        const skipBtn = document.getElementById('skipAutoUpdateBtn');
+        const allowBtn = document.getElementById('allowAutoUpdateBtn');
+        const declineBtn = document.getElementById('declineAutoUpdateBtn');
 
         const close = () => {
             localStorage.setItem('wtd-update-prompt-shown', 'true');
@@ -479,14 +497,13 @@ async function showAutoUpdatePromptIfNeeded() {
             resolve();
         };
 
-        enableBtn.addEventListener('click', () => {
-            const enabled = checkbox.checked;
-            localStorage.setItem('wtd-auto-update-enabled', enabled ? 'true' : 'false');
+        allowBtn.addEventListener('click', () => {
+            localStorage.setItem('wtd-auto-update-enabled', 'true');
             showNotification('Auto updates enabled. Checking now...', 'success');
             close();
         });
 
-        skipBtn.addEventListener('click', () => {
+        declineBtn.addEventListener('click', () => {
             localStorage.setItem('wtd-auto-update-enabled', 'false');
             close();
         });
@@ -522,7 +539,7 @@ function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
         border: 2px solid var(--accent);
         border-radius: 12px;
         padding: 28px;
-        max-width: 520px;
+        max-width: 400px;
         width: 100%;
         color: var(--fg-light);
         box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
@@ -530,12 +547,10 @@ function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
     `;
 
     modal.innerHTML = `
-        <h2 style="color: var(--accent); margin-bottom: 14px; font-size: 20px; text-align: center;">Update Available</h2>
-        <p style="margin-bottom: 12px; color: var(--fg-light);">A newer version of ${appName} is available:</p>
-        <p style="margin-bottom: 10px; font-weight: 700;">Current: ${appVersion} — Latest: ${latestVersion}</p>
-        <div style="margin-bottom: 16px; color: var(--fg-muted); line-height: 1.5; max-height: 220px; overflow-y: auto; border: 1px solid var(--button-bg); padding: 12px; border-radius: 6px; background-color: var(--input-bg);">${releaseNotes || 'Release notes not available.'}</div>
-        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
-            <button id="openReleasePageBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Open Release Page</button>
+        <h2 style="color: var(--accent); margin-bottom: 18px; font-size: 20px; text-align: center;">Update Available</h2>
+        <p style="margin-bottom: 16px; text-align: center; font-weight: 700; font-size: 14px;">Current: ${appVersion} — Latest: ${latestVersion}</p>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button id="openReleasePageBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Open Release Page</button>
             <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Dismiss</button>
         </div>
     `;
@@ -543,8 +558,14 @@ function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('openReleasePageBtn').addEventListener('click', () => {
-        window.open(releaseUrl, '_blank');
+    document.getElementById('openReleasePageBtn').addEventListener('click', async () => {
+        try {
+            const { ipcRenderer } = require('electron');
+            await ipcRenderer.invoke('open-url', releaseUrl);
+        } catch (error) {
+            console.error('Failed to open URL via IPC:', error);
+            window.open(releaseUrl, '_blank');
+        }
     });
     document.getElementById('dismissUpdateBtn').addEventListener('click', () => {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -558,22 +579,61 @@ async function checkForUpdates({ showStatus = false } = {}) {
     }
 
     try {
-        const response = await fetch('https://api.github.com/repos/Unyion/WTD/releases/latest', {
-            headers: {
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': `${appName}/${appVersion}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Update check failed: ${response.status}`);
+        // Build headers with optional authentication for private repos
+        const headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': `${appName}/${appVersion}`
+        };
+        
+        // Check for GitHub token in environment (set via process.env.GITHUB_TOKEN)
+        // This is needed for private repositories
+        const githubToken = typeof window !== 'undefined' && window.GITHUB_TOKEN 
+            ? window.GITHUB_TOKEN 
+            : process.env?.GITHUB_TOKEN;
+        
+        if (githubToken) {
+            headers['Authorization'] = `token ${githubToken}`;
         }
 
-        const data = await response.json();
-        const latestTag = data.tag_name || data.name || '';
-        const latestVersion = latestTag.replace(/^v/, '');
-        const releaseNotes = data.body || '';
-        const releaseUrl = data.html_url || updateRepoUrl;
+        const response = await fetch('https://api.github.com/repos/Unyion/WTD/releases/latest', {
+            headers: headers
+        });
+
+        let latestTag;
+        let releaseNotes = '';
+        let releaseUrl = updateRepoUrl;
+
+        if (response.status === 404) {
+            // If there is no canonical latest release (e.g. only prereleases), try the releases list
+            const releasesResponse = await fetch('https://api.github.com/repos/Unyion/WTD/releases?per_page=1', {
+                headers: headers
+            });
+
+            if (releasesResponse.ok) {
+                const releasesData = await releasesResponse.json();
+                if (Array.isArray(releasesData) && releasesData.length > 0) {
+                    latestTag = releasesData[0].tag_name || releasesData[0].name || '';
+                    releaseNotes = releasesData[0].body || '';
+                    releaseUrl = releasesData[0].html_url || updateRepoUrl;
+                } else {
+                    throw new Error('No releases found for this repository.');
+                }
+            } else {
+                const body = await releasesResponse.text().catch(() => '');
+                throw new Error(`Update check failed: ${releasesResponse.status}${body ? ` - ${body}` : ''}`);
+            }
+        } else {
+            if (!response.ok) {
+                const body = await response.text().catch(() => '');
+                throw new Error(`Update check failed: ${response.status}${body ? ` - ${body}` : ''}`);
+            }
+
+            const data = await response.json();
+            latestTag = data.tag_name || data.name || '';
+            releaseNotes = data.body || '';
+            releaseUrl = data.html_url || updateRepoUrl;
+        }
+        const latestVersion = (latestTag || '').replace(/^v/, '');
 
         if (isVersionNewer(latestVersion, appVersion)) {
             showNotification(`Update available: ${latestVersion}`, 'success');
@@ -588,7 +648,8 @@ async function checkForUpdates({ showStatus = false } = {}) {
     } catch (error) {
         console.error('Error checking for updates:', error);
         if (showStatus) {
-            showNotification('Unable to check for updates.', 'warning');
+            const message = error?.message ? `Unable to check for updates: ${error.message}` : 'Unable to check for updates.';
+            showNotification(message, 'warning');
         }
     } finally {
         if (showStatus) {
@@ -827,6 +888,128 @@ async function getLocationByIP() {
     return null;
 }
 
+// Fetch weather forecast for lookahead checking
+async function fetchWeatherForecast(lat, lon) {
+    try {
+        // Return cached data if still valid
+        if (weatherForecast.isCacheValid()) {
+            console.log('Using cached forecast data');
+            return weatherForecast.data;
+        }
+        
+        const API_KEY = '1b3f996b321116580a695dbe6ae7f026';
+        const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+        const units = tempUnit === 'F' ? 'imperial' : 'metric';
+        const timestamp = Date.now();
+        
+        const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=${units}&_=${timestamp}`;
+        
+        console.log('Fetching forecast from API...');
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        
+        const response = await fetch(url, {
+            signal: controller.signal,
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'WTD-App/1.0'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const data = await response.json();
+            const forecastItems = data.list || [];
+            
+            // Store forecast data
+            weatherForecast.setData(forecastItems);
+            console.log('Forecast data cached:', forecastItems.length, 'items');
+            
+            return forecastItems;
+        } else {
+            console.error('Forecast API error:', response.status);
+            return [];
+        }
+    } catch (error) {
+        console.error('Error fetching forecast:', error.message);
+        return [];
+    }
+}
+
+// Get upcoming weather conditions within the lookahead buffer
+function getUpcomingWeatherConditions(bufferMinutes = 120) {
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + bufferMinutes * 60 * 1000);
+    const conditions = [];
+    
+    weatherForecast.data.forEach(item => {
+        const itemTime = new Date(item.dt * 1000);
+        if (itemTime >= now && itemTime <= futureTime) {
+            const condition = item.weather[0]?.main?.toLowerCase() || 'unknown';
+            conditions.push({
+                time: itemTime,
+                condition: condition,
+                description: item.weather[0]?.description || ''
+            });
+        }
+    });
+    
+    return conditions;
+}
+
+// Check if bad weather is predicted within the buffer period
+function willWeatherBlockActivity(activity, upcomingConditions) {
+    if (!activity.weatherDependent || activity.weatherRestrictions.length === 0) {
+        return false; // Activity doesn't have weather restrictions
+    }
+    
+    // For activities with time windows, filter conditions to relevant times
+    let relevantConditions = upcomingConditions;
+    
+    if (activity.timeDependent && !activity.daylightOnly) {
+        // Filter conditions to only those during the activity's time window
+        const startHour = parseInt(activity.startTime.split(':')[0]);
+        const endHour = parseInt(activity.endTime.split(':')[0]);
+        
+        relevantConditions = upcomingConditions.filter(item => {
+            const hour = item.time.getHours();
+            return hour >= startHour && hour < endHour;
+        });
+    }
+    
+    // Check if any condition matches a restriction
+    return relevantConditions.some(item => 
+        activity.weatherRestrictions.some(restriction => 
+            item.condition.includes(restriction.toLowerCase())
+        )
+    );
+}
+
+// Get time until weather event
+function getTimeUntilWeatherEvent(activity, upcomingConditions) {
+    if (!activity.weatherDependent || activity.weatherRestrictions.length === 0) {
+        return null;
+    }
+    
+    const now = new Date();
+    
+    for (const item of upcomingConditions) {
+        if (activity.weatherRestrictions.some(restriction => 
+            item.condition.includes(restriction.toLowerCase()))) {
+            const minutesUntil = Math.round((item.time - now) / 60000);
+            return {
+                minutesUntil: minutesUntil,
+                condition: item.condition
+            };
+        }
+    }
+    
+    return null;
+}
+
 // Enhanced updateWeather function with better error handling
 async function updateWeather() {
     console.log('updateWeather() called at:', new Date().toLocaleTimeString());
@@ -956,6 +1139,14 @@ async function updateWeather() {
             
             // Update daylight label with real times
             updateDaylightLabel();
+            
+            // Fetch forecast data asynchronously (don't block on it)
+            const lat = weatherData.coord.lat;
+            const lon = weatherData.coord.lon;
+            fetchWeatherForecast(lat, lon).catch(error => {
+                console.error('Forecast fetch failed:', error);
+                // Continue without forecast data
+            });
             
             // Update activities list based on new weather
             loadActivities();
@@ -1453,10 +1644,17 @@ function getActivityDetails(activity) {
 
 // Check if activity is available based on current conditions
 function isActivityAvailable(activity, conditions) {
-    // Weather check
+    // Weather check - current conditions
     if (activity.weatherDependent && activity.weatherRestrictions.length > 0) {
         if (activity.weatherRestrictions.some(restriction => 
             conditions.weather.toLowerCase().includes(restriction.toLowerCase()))) {
+            return false;
+        }
+    }
+    
+    // Weather check - upcoming conditions within buffer
+    if (activity.weatherDependent && activity.weatherRestrictions.length > 0 && conditions.upcomingConditions) {
+        if (willWeatherBlockActivity(activity, conditions.upcomingConditions)) {
             return false;
         }
     }
@@ -1519,11 +1717,30 @@ function isActivityAvailable(activity, conditions) {
 function getUnavailabilityReason(activity, conditions) {
     const reasons = [];
     
-    // Weather check
+    // Weather check - current conditions
     if (activity.weatherDependent && activity.weatherRestrictions.length > 0) {
         if (activity.weatherRestrictions.some(restriction => 
             conditions.weather.toLowerCase().includes(restriction.toLowerCase()))) {
             reasons.push(`Current weather: ${conditions.weather}`);
+        }
+    }
+    
+    // Weather check - upcoming conditions
+    if (activity.weatherDependent && activity.weatherRestrictions.length > 0 && conditions.upcomingConditions) {
+        const weatherEvent = getTimeUntilWeatherEvent(activity, conditions.upcomingConditions);
+        if (weatherEvent !== null) {
+            const { minutesUntil, condition } = weatherEvent;
+            let timeStr;
+            if (minutesUntil < 60) {
+                timeStr = `${minutesUntil}m`;
+            } else {
+                const hours = Math.floor(minutesUntil / 60);
+                const mins = minutesUntil % 60;
+                timeStr = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+            }
+            // Capitalize condition (rain -> Rain, storm -> Storm, etc.)
+            const capitalizedCondition = condition.charAt(0).toUpperCase() + condition.slice(1);
+            reasons.push(`${capitalizedCondition} predicted in ${timeStr}`);
         }
     }
     
@@ -1748,10 +1965,18 @@ function getCurrentConditions() {
     else if (weatherText.includes('cloud')) weather = 'cloudy';
     else if (weatherText.includes('clear') || weatherText.includes('sunny')) weather = 'clear';
     
+    // Get weather lookahead buffer from settings (in minutes)
+    const bufferMinutes = parseInt(localStorage.getItem('wtd-weather-buffer') || '120', 10);
+    
+    // Get upcoming weather conditions
+    const upcomingConditions = getUpcomingWeatherConditions(bufferMinutes);
+    
     return {
         weather: weather,
         season: season,
-        currentTime: now
+        currentTime: now,
+        upcomingConditions: upcomingConditions,
+        bufferMinutes: bufferMinutes
     };
 }
 
@@ -1951,6 +2176,7 @@ function showSettingsModal() {
     const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
     const currentTheme = localStorage.getItem('wtd-theme') || 'auto';
     const currentAutoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
+    const currentWeatherBuffer = parseInt(localStorage.getItem('wtd-weather-buffer') || '120', 10);
     
     // Get current time for examples
     const now = new Date();
@@ -2072,6 +2298,23 @@ function showSettingsModal() {
             <div style="font-size: 10px; color: var(--fg-muted); margin-top: 8px; line-height: 1.4;">
                 The app will check for updates when it launches and notify you if a newer version is available.
             </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                <button id="checkUpdatesBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: 1px solid var(--button-active-bg); padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 12px;">Check for updates</button>
+            </div>
+        </div>
+
+        <!-- Weather Lookahead Buffer Setting -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">
+                Weather Lookahead Buffer: <span id="bufferValueDisplay">${currentWeatherBuffer}</span> minutes
+            </label>
+            <input type="range" id="weatherBufferSlider" min="60" max="360" step="30" value="${currentWeatherBuffer}" style="
+                width: 100%;
+                cursor: pointer;
+            ">
+            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 8px; line-height: 1.4;">
+                The app checks if bad weather is predicted within this timeframe and avoids suggesting activities that can't be done during that weather.
+            </div>
         </div>
 
         <!-- Buttons -->
@@ -2110,6 +2353,7 @@ function showSettingsModal() {
         const saveBtn = document.getElementById('saveSettingsBtn');
         const cancelBtn = document.getElementById('cancelSettingsBtn');
         const detectBtn = document.getElementById('detectLocationBtn');
+        const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
         const locationInput = document.getElementById('settingsLocation');
         const overlay = document.getElementById('settings-modal-overlay');
         
@@ -2191,6 +2435,28 @@ function showSettingsModal() {
                     detectBtn.textContent = originalText;
                     detectBtn.disabled = false;
                 }
+            });
+        }
+
+        if (checkUpdatesBtn) {
+            checkUpdatesBtn.addEventListener('click', async () => {
+                checkUpdatesBtn.textContent = '🔄 Checking...';
+                checkUpdatesBtn.disabled = true;
+                try {
+                    await checkForUpdates({ showStatus: true });
+                } finally {
+                    checkUpdatesBtn.textContent = 'Check for updates';
+                    checkUpdatesBtn.disabled = false;
+                }
+            });
+        }
+        
+        // Weather buffer slider
+        const bufferSlider = document.getElementById('weatherBufferSlider');
+        const bufferDisplay = document.getElementById('bufferValueDisplay');
+        if (bufferSlider && bufferDisplay) {
+            bufferSlider.addEventListener('input', (e) => {
+                bufferDisplay.textContent = e.target.value;
             });
         }
         
@@ -2349,6 +2615,7 @@ function saveSettings() {
     const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
     const theme = document.querySelector('input[name="theme"]:checked').value;
     const autoUpdateEnabled = document.getElementById('settingsAutoUpdate')?.checked === true;
+    const weatherBuffer = parseInt(document.getElementById('weatherBufferSlider')?.value || '120', 10);
     
     // Save to localStorage
     if (location) {
@@ -2360,8 +2627,9 @@ function saveSettings() {
     localStorage.setItem('wtd-time-format', timeFormat);
     localStorage.setItem('wtd-temp-unit', tempUnit);
     localStorage.setItem('wtd-auto-update-enabled', autoUpdateEnabled ? 'true' : 'false');
+    localStorage.setItem('wtd-weather-buffer', weatherBuffer.toString());
     
-    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme, autoUpdateEnabled });
+    console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme, autoUpdateEnabled, weatherBuffer });
     
     // Apply theme immediately
     setTheme(theme);
@@ -2777,6 +3045,9 @@ function closeEditModal() {
 
 // Close settings modal
 function closeSettingsModal() {
+    // Hide the autofill dropdown if it's visible
+    locationAutocomplete.hideSuggestions();
+    
     const overlay = document.getElementById('settings-modal-overlay');
     if (overlay) {
         overlay.remove();

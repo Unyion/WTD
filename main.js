@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
 // Keep a global reference of the window object
@@ -21,6 +21,15 @@ function createWindow() {
     backgroundColor: '#212121',
     title: 'WTD'
   });
+
+  // Pass GitHub token to renderer if available (for private repo access)
+  if (process.env.GITHUB_TOKEN) {
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.executeJavaScript(`
+        window.GITHUB_TOKEN = "${process.env.GITHUB_TOKEN}";
+      `);
+    });
+  }
 
   // Load the app
   mainWindow.loadFile('src/index.html');
@@ -77,4 +86,9 @@ ipcMain.handle('get-activities', async () => {
 ipcMain.handle('suggest-activity', async () => {
   // TODO: Implement activity suggestion logic
   return { name: 'Sample Activity', description: 'This is a test activity' };
+});
+
+ipcMain.handle('open-url', async (event, url) => {
+  // Open URL in default browser
+  await shell.openExternal(url);
 });
