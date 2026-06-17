@@ -13,6 +13,9 @@
             <div class="settings-button" id="settingsButton" title="Settings">
                 ⚙️
             </div>
+            <div class="history-button" id="historyButton" title="Activity History">
+                📋
+            </div>
             <!-- <div class="theme-toggle" id="themeToggle">
                 <div class="theme-icon sun-icon" id="sunIcon" title="Light mode">☀️</div>
                 <div class="theme-icon moon-icon" id="moonIcon" title="Dark mode">🌙</div>
@@ -90,6 +93,37 @@
                                 <span class="checkmark"></span>
                                 Snow
                             </label>
+                        </div>
+                        
+                        <!-- Temperature range section -->
+                        <div class="temperature-range-section">
+                            <label class="sub-checkbox">
+                                <input type="checkbox" id="temperatureDependent">
+                                <span class="checkmark"></span>
+                                Temperature Range
+                            </label>
+                            
+                            <div class="temperature-controls" id="temperatureControls" style="display: none;">
+                                <p class="instruction-text">Activity cannot be done if temperature is outside this range</p>
+                                
+                                <div class="temp-slider-wrapper">
+                                    <div class="temp-display">
+                                        <div class="temp-value">
+                                            <span class="temp-label">Min:</span>
+                                            <span class="temp-min-value" id="tempMinDisplay">-20</span><span class="temp-unit-letter" id="tempUnitDisplay">°F</span>
+                                        </div>
+                                        <div class="temp-value">
+                                            <span class="temp-label">Max:</span>
+                                            <span class="temp-max-value" id="tempMaxDisplay">120</span><span class="temp-unit-letter" id="tempUnitDisplay2">°F</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="temp-slider-container">
+                                        <input type="range" id="temperatureMin" class="temp-slider temp-slider-min" min="-50" max="140" value="-20" />
+                                        <input type="range" id="temperatureMax" class="temp-slider temp-slider-max" min="-50" max="140" value="120" />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -216,6 +250,25 @@
                     Add Activity
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- History Panel -->
+    <div class="history-panel" id="historyPanel">
+        <div class="history-panel-header">
+            <h2>Activity History</h2>
+            <button class="history-close-button" id="historyCloseButton" title="Close">✕</button>
+        </div>
+        <div class="history-list" id="historyList">
+            <!-- History entries will be populated here -->
+        </div>
+        <div class="history-footer">
+            <button class="history-undo-button" id="historyUndoButton" title="Undo last deletion (Ctrl+Z)" disabled>
+                ↶ Undo
+            </button>
+            <button class="history-clear-all-button" id="historyClearAllButton" title="Clear all history">
+                Clear All
+            </button>
         </div>
     </div>
 

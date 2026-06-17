@@ -1,6 +1,12 @@
 // DOM elements
 const weatherDependentCheckbox = document.getElementById('weatherDependent');
 const weatherOptions = document.getElementById('weatherOptions');
+const temperatureDependentCheckbox = document.getElementById('temperatureDependent');
+const temperatureControls = document.getElementById('temperatureControls');
+const temperatureMinSlider = document.getElementById('temperatureMin');
+const temperatureMaxSlider = document.getElementById('temperatureMax');
+const tempMinDisplay = document.getElementById('tempMinDisplay');
+const tempMaxDisplay = document.getElementById('tempMaxDisplay');
 const seasonalCheckbox = document.getElementById('seasonal');
 const seasonalOptions = document.getElementById('seasonalOptions');
 const timeDependentCheckbox = document.getElementById('timeDependent');
@@ -309,9 +315,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeTheme();
     setupSystemThemeListener();
     
-    // Load existing activities
-    loadActivities();
+    // Load existing activities - will be called after weather is loaded in updateWeather()
     validateForm();
+    
+    // Initialize temperature unit display
+    updateTemperatureUnitDisplay();
+    
+    // Initialize temperature slider bounds based on unit preference
+    const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    if (temperatureMinSlider && temperatureMaxSlider) {
+        if (tempUnit === 'C') {
+            temperatureMinSlider.min = '-30';
+            temperatureMinSlider.max = '50';
+            temperatureMaxSlider.min = '-30';
+            temperatureMaxSlider.max = '50';
+        } else {
+            temperatureMinSlider.min = '-20';
+            temperatureMinSlider.max = '120';
+            temperatureMaxSlider.min = '-20';
+            temperatureMaxSlider.max = '120';
+        }
+    }
     
     // Show initial loading state
     weatherDisplay.textContent = '🔄 Starting up...';
@@ -338,10 +362,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupEventListeners() {
     // Main checkbox toggles
     weatherDependentCheckbox.addEventListener('change', toggleWeatherOptions);
+    temperatureDependentCheckbox.addEventListener('change', toggleTemperatureControls);
     seasonalCheckbox.addEventListener('change', toggleSeasonalOptions);
     timeDependentCheckbox.addEventListener('change', toggleTimeOptions);
     daylightOnlyCheckbox.addEventListener('change', toggleDaylightOnly);
     if (dayOfWeekCheckbox) dayOfWeekCheckbox.addEventListener('change', toggleDayOfWeekOptions);
+    
+    // Temperature range sliders
+    if (temperatureMinSlider && temperatureMaxSlider) {
+        temperatureMinSlider.addEventListener('input', updateTemperatureSliders);
+        temperatureMaxSlider.addEventListener('input', updateTemperatureSliders);
+    }
     
     // Button clicks
     addActivityButton.addEventListener('click', addActivity);
@@ -418,6 +449,44 @@ function setupEventListeners() {
         });
     }
     
+    // History button click
+    const historyButton = document.getElementById('historyButton');
+    if (historyButton) {
+        historyButton.addEventListener('click', () => {
+            console.log('History button clicked');
+            const historyPanel = document.getElementById('historyPanel');
+            historyPanel.classList.toggle('open');
+            if (historyPanel.classList.contains('open')) {
+                displayHistory();
+            }
+        });
+    }
+    
+    // History close button
+    const historyCloseButton = document.getElementById('historyCloseButton');
+    if (historyCloseButton) {
+        historyCloseButton.addEventListener('click', () => {
+            const historyPanel = document.getElementById('historyPanel');
+            historyPanel.classList.remove('open');
+        });
+    }
+    
+    // History delete button (for selected entries)
+    const historyUndoButton = document.getElementById('historyUndoButton');
+    if (historyUndoButton) {
+        historyUndoButton.addEventListener('click', () => {
+            undoLastDeletion();
+        });
+    }
+    
+    // History clear all button
+    const historyClearAllButton = document.getElementById('historyClearAllButton');
+    if (historyClearAllButton) {
+        historyClearAllButton.addEventListener('click', () => {
+            clearAllHistory();
+        });
+    }
+    
     // Input validation
     activityNameInput.addEventListener('input', validateForm);
     
@@ -425,6 +494,17 @@ function setupEventListeners() {
     activityNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !addActivityButton.disabled) {
             addActivity();
+        }
+    });
+    
+    // Keyboard shortcut for undo (Ctrl+Z or Cmd+Z)
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            const undoButton = document.getElementById('historyUndoButton');
+            if (undoButton && !undoButton.disabled) {
+                undoLastDeletion();
+            }
         }
     });
 }
@@ -1209,6 +1289,94 @@ function toggleWeatherOptions() {
     }
 }
 
+// Toggle temperature controls visibility
+function toggleTemperatureControls() {
+    if (temperatureDependentCheckbox.checked) {
+        temperatureControls.style.display = 'block';
+        setTimeout(() => temperatureControls.classList.add('show'), 10);
+    } else {
+        temperatureControls.classList.remove('show');
+        setTimeout(() => temperatureControls.style.display = 'none', 300);
+        
+        // Reset temperature sliders to default
+        if (temperatureMinSlider && temperatureMaxSlider) {
+            temperatureMinSlider.value = -20;
+            temperatureMaxSlider.value = 120;
+            updateTemperatureDisplay();
+        }
+    }
+}
+
+// Update temperature display values
+function updateTemperatureDisplay() {
+    if (tempMinDisplay && tempMaxDisplay) {
+        tempMinDisplay.textContent = temperatureMinSlider.value;
+        tempMaxDisplay.textContent = temperatureMaxSlider.value;
+    }
+}
+
+// Handle temperature slider changes (ensure min doesn't exceed max and vice versa)
+function updateTemperatureSliders() {
+    const minVal = parseInt(temperatureMinSlider.value);
+    const maxVal = parseInt(temperatureMaxSlider.value);
+    
+    if (minVal > maxVal) {
+        temperatureMinSlider.value = maxVal;
+    } else if (maxVal < minVal) {
+        temperatureMaxSlider.value = minVal;
+    }
+    
+    updateTemperatureDisplay();
+}
+
+// Update temperature unit display
+function updateTemperatureUnitDisplay() {
+    const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    const unitSuffix = tempUnit === 'F' ? '°F' : '°C';
+    
+    const unitDisplays = document.querySelectorAll('.temp-unit-letter');
+    unitDisplays.forEach(display => {
+        display.textContent = unitSuffix;
+    });
+}
+
+// Convert temperature values when unit changes
+function convertTemperatureUnit(oldUnit, newUnit) {
+    if (!temperatureMinSlider || !temperatureMaxSlider) return;
+    
+    let minVal = parseInt(temperatureMinSlider.value);
+    let maxVal = parseInt(temperatureMaxSlider.value);
+    
+    // Convert from old unit to new unit
+    if (oldUnit === 'F' && newUnit === 'C') {
+        // F to C: (F - 32) × 5/9
+        minVal = Math.round((minVal - 32) * 5/9);
+        maxVal = Math.round((maxVal - 32) * 5/9);
+        
+        // Update slider bounds for Celsius range
+        temperatureMinSlider.min = '-30';
+        temperatureMinSlider.max = '50';
+        temperatureMaxSlider.min = '-30';
+        temperatureMaxSlider.max = '50';
+    } else if (oldUnit === 'C' && newUnit === 'F') {
+        // C to F: (C × 9/5) + 32
+        minVal = Math.round((minVal * 9/5) + 32);
+        maxVal = Math.round((maxVal * 9/5) + 32);
+        
+        // Update slider bounds for Fahrenheit range
+        temperatureMinSlider.min = '-20';
+        temperatureMinSlider.max = '120';
+        temperatureMaxSlider.min = '-20';
+        temperatureMaxSlider.max = '120';
+    }
+    
+    // Set new values
+    temperatureMinSlider.value = minVal;
+    temperatureMaxSlider.value = maxVal;
+    updateTemperatureDisplay();
+    updateTemperatureUnitDisplay();
+}
+
 // Toggle seasonal options visibility
 function toggleSeasonalOptions() {
     if (seasonalCheckbox.checked) {
@@ -1349,6 +1517,8 @@ async function addActivity() {
         name: activityName,
         weatherDependent: weatherDependentCheckbox.checked,
         weatherRestrictions: [],
+        temperatureDependent: temperatureDependentCheckbox.checked,
+        temperatureRange: { min: null, max: null },
         seasonal: seasonalCheckbox.checked,
         seasons: [],
         timeDependent: timeDependentCheckbox.checked,
@@ -1363,8 +1533,16 @@ async function addActivity() {
     
     // Collect weather restrictions
     if (activity.weatherDependent) {
-        const weatherCheckboxes = weatherOptions.querySelectorAll('input[type="checkbox"]:checked');
+        const weatherCheckboxes = weatherOptions.querySelectorAll('input[type="checkbox"]:not(#temperatureDependent):checked');
         activity.weatherRestrictions = Array.from(weatherCheckboxes).map(cb => cb.value);
+    }
+    
+    // Collect temperature restrictions
+    if (activity.temperatureDependent && temperatureMinSlider && temperatureMaxSlider) {
+        activity.temperatureRange = {
+            min: parseInt(temperatureMinSlider.value),
+            max: parseInt(temperatureMaxSlider.value)
+        };
     }
     
     // Collect seasonal restrictions
@@ -1627,6 +1805,13 @@ function getActivityDetails(activity) {
         details.push(`Weather: No ${activity.weatherRestrictions.join(', ')}`);
     }
     
+    if (activity.temperatureDependent && activity.temperatureRange && 
+        activity.temperatureRange.min !== null && activity.temperatureRange.max !== null) {
+        const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+        const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
+        details.push(`Temp: ${activity.temperatureRange.min}-${activity.temperatureRange.max}${tempSuffix}`);
+    }
+    
     if (activity.seasonal && activity.seasons.length > 0) {
         details.push(`Seasons: ${activity.seasons.join(', ')}`);
     }
@@ -1656,6 +1841,17 @@ function isActivityAvailable(activity, conditions) {
     if (activity.weatherDependent && activity.weatherRestrictions.length > 0 && conditions.upcomingConditions) {
         if (willWeatherBlockActivity(activity, conditions.upcomingConditions)) {
             return false;
+        }
+    }
+    
+    // Temperature check
+    if (activity.temperatureDependent && activity.temperatureRange && 
+        activity.temperatureRange.min !== null && activity.temperatureRange.max !== null) {
+        if (conditions.temperature !== null && conditions.temperature !== undefined) {
+            if (conditions.temperature < activity.temperatureRange.min || 
+                conditions.temperature > activity.temperatureRange.max) {
+                return false;
+            }
         }
     }
     
@@ -1741,6 +1937,20 @@ function getUnavailabilityReason(activity, conditions) {
             // Capitalize condition (rain -> Rain, storm -> Storm, etc.)
             const capitalizedCondition = condition.charAt(0).toUpperCase() + condition.slice(1);
             reasons.push(`${capitalizedCondition} predicted in ${timeStr}`);
+        }
+    }
+    
+    // Temperature check
+    if (activity.temperatureDependent && activity.temperatureRange && 
+        activity.temperatureRange.min !== null && activity.temperatureRange.max !== null) {
+        if (conditions.temperature !== null && conditions.temperature !== undefined) {
+            const tempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+            const tempSuffix = tempUnit === 'F' ? '°F' : '°C';
+            
+            if (conditions.temperature < activity.temperatureRange.min || 
+                conditions.temperature > activity.temperatureRange.max) {
+                reasons.push(`Temperature outside range (${activity.temperatureRange.min}-${activity.temperatureRange.max}${tempSuffix}, current: ${conditions.temperature}${tempSuffix})`);
+            }
         }
     }
     
@@ -1965,6 +2175,14 @@ function getCurrentConditions() {
     else if (weatherText.includes('cloud')) weather = 'cloudy';
     else if (weatherText.includes('clear') || weatherText.includes('sunny')) weather = 'clear';
     
+    // Extract current temperature from weather display
+    // Temperature format is typically "Description, ##°F" or "Description, ##°C"
+    let temperature = null;
+    const tempMatch = weatherDisplay.textContent.match(/(\d+)°[FC]/);
+    if (tempMatch) {
+        temperature = parseInt(tempMatch[1], 10);
+    }
+    
     // Get weather lookahead buffer from settings (in minutes)
     const bufferMinutes = parseInt(localStorage.getItem('wtd-weather-buffer') || '120', 10);
     
@@ -1975,6 +2193,7 @@ function getCurrentConditions() {
         weather: weather,
         season: season,
         currentTime: now,
+        temperature: temperature,
         upcomingConditions: upcomingConditions,
         bufferMinutes: bufferMinutes
     };
@@ -2123,6 +2342,7 @@ function showActivitySuggestion(activity) {
     
     acceptBtn.addEventListener('click', () => {
         document.body.removeChild(overlay);
+        recordActivityHistory(activity.name);
         showNotification(`Great choice! Enjoy your ${activity.name}!`, 'success');
     });
     
@@ -2617,6 +2837,9 @@ function saveSettings() {
     const autoUpdateEnabled = document.getElementById('settingsAutoUpdate')?.checked === true;
     const weatherBuffer = parseInt(document.getElementById('weatherBufferSlider')?.value || '120', 10);
     
+    // Get current temperature unit before saving
+    const currentTempUnit = localStorage.getItem('wtd-temp-unit') || 'F';
+    
     // Save to localStorage
     if (location) {
         localStorage.setItem('wtd-location', location);
@@ -2628,6 +2851,14 @@ function saveSettings() {
     localStorage.setItem('wtd-temp-unit', tempUnit);
     localStorage.setItem('wtd-auto-update-enabled', autoUpdateEnabled ? 'true' : 'false');
     localStorage.setItem('wtd-weather-buffer', weatherBuffer.toString());
+    
+    // Convert temperature sliders if unit changed
+    if (currentTempUnit !== tempUnit) {
+        convertTemperatureUnit(currentTempUnit, tempUnit);
+    } else {
+        // Update unit display even if no conversion needed
+        updateTemperatureUnitDisplay();
+    }
     
     console.log('Settings saved:', { location: location || 'auto-detect', timeFormat, tempUnit, theme, autoUpdateEnabled, weatherBuffer });
     
@@ -2941,6 +3172,11 @@ function setupEditModalEventListeners(originalActivity) {
             document.removeEventListener('keydown', handleEscape);
         }
     };
+    // Store reference on overlay so closeEditModal can clean it up
+    const overlay = document.getElementById('edit-modal-overlay');
+    if (overlay) {
+        overlay._handleEscapeKey = handleEscape;
+    }
     document.addEventListener('keydown', handleEscape);
 }
 
@@ -3035,10 +3271,136 @@ function saveEditedActivity(originalActivity) {
     }
 }
 
+// Show delete confirmation modal (custom, not native confirm)
+function showDeleteConfirmationModal(message, onConfirm) {
+    const overlay = document.createElement('div');
+    overlay.id = 'delete-confirm-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid #ff6b6b;
+        border-radius: 8px;
+        padding: 28px;
+        max-width: 400px;
+        width: 100%;
+        color: var(--fg-light);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        text-align: center;
+    `;
+    
+    modal.innerHTML = `
+        <h2 style="color: #ff6b6b; margin-bottom: 16px; font-size: 18px;">Delete Activity</h2>
+        <p style="color: var(--fg-muted); margin-bottom: 24px; font-size: 12px; line-height: 1.5;">${message}</p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="deleteConfirmBtn" style="
+                background-color: #ff6b6b;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Delete</button>
+            <button id="deleteCancelBtn" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    const confirmBtn = document.getElementById('deleteConfirmBtn');
+    const cancelBtn = document.getElementById('deleteCancelBtn');
+    
+    const closeModal = () => {
+        if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+    };
+    
+    // Focus the cancel button for accessibility
+    cancelBtn.focus();
+    
+    // Add hover effects to Delete button
+    confirmBtn.addEventListener('mouseenter', () => {
+        confirmBtn.style.backgroundColor = '#d32f2f';
+    });
+    confirmBtn.addEventListener('mouseleave', () => {
+        confirmBtn.style.backgroundColor = '#ff6b6b';
+    });
+    
+    // Add hover effects to Cancel button
+    cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-active-bg)';
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-bg)';
+    });
+    
+    confirmBtn.addEventListener('click', () => {
+        closeModal();
+        onConfirm();
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+        closeModal();
+        // Return focus to the input field
+        activityNameInput.focus();
+    });
+    
+    // Allow Enter to confirm and Escape to cancel
+    const handleKeydown = (e) => {
+        if (e.key === 'Enter') {
+            closeModal();
+            onConfirm();
+        } else if (e.key === 'Escape') {
+            closeModal();
+            activityNameInput.focus();
+        }
+    };
+    
+    document.addEventListener('keydown', handleKeydown, { once: true });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeModal();
+            // Return focus to the input field
+            activityNameInput.focus();
+        }
+    });
+}
+
 // Close edit modal
 function closeEditModal() {
     const overlay = document.getElementById('edit-modal-overlay');
     if (overlay) {
+        // Clean up the escape key listener if it exists
+        if (overlay._handleEscapeKey) {
+            document.removeEventListener('keydown', overlay._handleEscapeKey);
+        }
         overlay.remove();
     }
 }
@@ -3163,20 +3525,25 @@ function getWeatherEmoji(condition, isNightTime = false) {
 
 // Delete activity
 function deleteActivity(activityId) {
-    if (confirm('Are you sure you want to delete this activity?')) {
+    showDeleteConfirmationModal('Are you sure you want to delete this activity?', () => {
         let activities = JSON.parse(localStorage.getItem('wtd-activities') || '[]');
         activities = activities.filter(activity => activity.id !== activityId);
         localStorage.setItem('wtd-activities', JSON.stringify(activities));
         
         loadActivities();
         showNotification('Activity deleted', 'success');
-    }
+        
+        // Ensure input field is ready for interaction
+        activityNameInput.focus();
+        activityNameInput.blur();
+    });
 }
 
 // Reset form to initial state
 function resetForm() {
     activityNameInput.value = '';
     weatherDependentCheckbox.checked = false;
+    temperatureDependentCheckbox.checked = false;
     seasonalCheckbox.checked = false;
     timeDependentCheckbox.checked = false;
     daylightOnlyCheckbox.checked = false;
@@ -3187,6 +3554,7 @@ function resetForm() {
     
     // Hide all sub-options
     toggleWeatherOptions();
+    toggleTemperatureControls();
     toggleSeasonalOptions();
     toggleTimeOptions();
     toggleDayOfWeekOptions();
@@ -3194,6 +3562,13 @@ function resetForm() {
     // Reset time selects
     startTimeSelect.value = '09:00';
     endTimeSelect.value = '17:00';
+    
+    // Reset temperature sliders
+    if (temperatureMinSlider && temperatureMaxSlider) {
+        temperatureMinSlider.value = -20;
+        temperatureMaxSlider.value = 120;
+        updateTemperatureDisplay();
+    }
     
     // Uncheck all sub-options
     const allCheckboxes = document.querySelectorAll('.sub-options input[type="checkbox"]');
@@ -3258,4 +3633,287 @@ function showNotification(message, type = 'info') {
             }
         }, 300);
     }, 3000);
+}
+
+// ============ HISTORY FUNCTIONS ============
+
+// Track the last undoable state (can be a single deletion or a full clear)
+let lastUndoState = null;
+
+// Record activity acceptance to history
+function recordActivityHistory(activityName) {
+    try {
+        let history = JSON.parse(localStorage.getItem('wtd-activity-history') || '[]');
+        
+        const entry = {
+            activityName: activityName,
+            timestamp: Date.now()
+        };
+        
+        history.push(entry);
+        localStorage.setItem('wtd-activity-history', JSON.stringify(history));
+        
+        console.log('Activity recorded to history:', activityName, 'at', new Date(entry.timestamp).toLocaleString());
+    } catch (error) {
+        console.error('Error recording activity history:', error);
+    }
+}
+
+// Get all history entries
+function getActivityHistory() {
+    try {
+        const history = JSON.parse(localStorage.getItem('wtd-activity-history') || '[]');
+        // Return sorted by timestamp, newest first
+        return history.sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+        console.error('Error retrieving activity history:', error);
+        return [];
+    }
+}
+
+// Format timestamp for display
+function formatHistoryTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const timeFormat = localStorage.getItem('wtd-time-format') || '24hr';
+    
+    // Format time part
+    let timeStr;
+    if (timeFormat === '12hr') {
+        timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } else {
+        timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    
+    // Check if today or yesterday
+    if (date.toDateString() === today.toDateString()) {
+        return `Today at ${timeStr}`;
+    } else if (date.toDateString() === yesterday.toDateString()) {
+        return `Yesterday at ${timeStr}`;
+    } else {
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${dateStr} at ${timeStr}`;
+    }
+}
+
+// Display history in the panel
+function displayHistory() {
+    const historyList = document.getElementById('historyList');
+    const history = getActivityHistory();
+    
+    historyList.innerHTML = '';
+    
+    if (history.length === 0) {
+        historyList.innerHTML = '<div class="history-empty-message">No history yet. Accept some activities to get started!</div>';
+        return;
+    }
+    
+    history.forEach(entry => {
+        const entryDiv = document.createElement('div');
+        entryDiv.className = 'history-entry';
+        entryDiv.dataset.timestamp = entry.timestamp;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'history-entry-content';
+        
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'history-entry-name';
+        nameSpan.textContent = entry.activityName;
+        
+        const timeSpan = document.createElement('div');
+        timeSpan.className = 'history-entry-time';
+        timeSpan.textContent = formatHistoryTimestamp(entry.timestamp);
+        
+        contentDiv.appendChild(nameSpan);
+        contentDiv.appendChild(timeSpan);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'history-entry-delete';
+        deleteBtn.textContent = '✕';
+        deleteBtn.title = 'Delete this entry';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteHistoryEntry(entry.timestamp);
+        });
+        
+        entryDiv.appendChild(contentDiv);
+        entryDiv.appendChild(deleteBtn);
+        
+        historyList.appendChild(entryDiv);
+    });
+}
+
+// Delete a specific history entry
+function deleteHistoryEntry(timestamp) {
+    try {
+        let history = JSON.parse(localStorage.getItem('wtd-activity-history') || '[]');
+        const deletedEntry = history.find(entry => entry.timestamp === timestamp);
+        
+        if (deletedEntry) {
+            lastUndoState = {
+                type: 'delete',
+                data: deletedEntry
+            };
+            enableUndoButton();
+        }
+        
+        history = history.filter(entry => entry.timestamp !== timestamp);
+        localStorage.setItem('wtd-activity-history', JSON.stringify(history));
+        
+        displayHistory();
+        showNotification('Entry deleted', 'success');
+    } catch (error) {
+        console.error('Error deleting history entry:', error);
+        showNotification('Error deleting entry', 'error');
+    }
+}
+
+// Enable the undo button
+function enableUndoButton() {
+    const undoButton = document.getElementById('historyUndoButton');
+    if (undoButton) {
+        undoButton.disabled = false;
+    }
+}
+
+// Undo the last undoable action (deletion or clear all)
+function undoLastDeletion() {
+    if (!lastUndoState) {
+        showNotification('Nothing to undo', 'info');
+        return;
+    }
+    
+    try {
+        let history = JSON.parse(localStorage.getItem('wtd-activity-history') || '[]');
+        
+        if (lastUndoState.type === 'delete') {
+            // Restore a single deleted entry
+            history.push(lastUndoState.data);
+            showNotification('Entry restored', 'success');
+        } else if (lastUndoState.type === 'clearAll') {
+            // Restore all cleared entries
+            history = lastUndoState.data;
+            showNotification('History restored', 'success');
+        }
+        
+        localStorage.setItem('wtd-activity-history', JSON.stringify(history));
+        displayHistory();
+        lastUndoState = null;
+        
+        const undoButton = document.getElementById('historyUndoButton');
+        if (undoButton) {
+            undoButton.disabled = true;
+        }
+    } catch (error) {
+        console.error('Error undoing action:', error);
+        showNotification('Error restoring', 'error');
+    }
+}
+
+// Clear all history with confirmation
+function clearAllHistory() {
+    // Create confirmation modal
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1001;
+    `;
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 350px;
+        text-align: center;
+        color: var(--fg-light);
+    `;
+    
+    modal.innerHTML = `
+        <h3 style="color: var(--accent); margin-bottom: 15px; font-size: 18px;">Clear All History?</h3>
+        <p style="color: var(--fg-muted); margin-bottom: 20px; font-size: 12px;">All history entries will be cleared. You can undo this until the app is closed.</p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="confirmClearAll" style="
+                background-color: #A52A2A;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Yes, Clear All</button>
+            <button id="cancelClearAll" style="
+                background-color: var(--button-bg);
+                color: var(--fg-light);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    const confirmBtn = document.getElementById('confirmClearAll');
+    const cancelBtn = document.getElementById('cancelClearAll');
+    
+    confirmBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        try {
+            const currentHistory = JSON.parse(localStorage.getItem('wtd-activity-history') || '[]');
+            lastUndoState = {
+                type: 'clearAll',
+                data: currentHistory
+            };
+            enableUndoButton();
+            
+            localStorage.setItem('wtd-activity-history', '[]');
+            displayHistory();
+            showNotification('All history cleared', 'success');
+        } catch (error) {
+            console.error('Error clearing history:', error);
+            showNotification('Error clearing history', 'error');
+        }
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    confirmBtn.addEventListener('mouseenter', () => {
+        confirmBtn.style.backgroundColor = '#8B0000';
+    });
+    confirmBtn.addEventListener('mouseleave', () => {
+        confirmBtn.style.backgroundColor = '#A52A2A';
+    });
+    
+    cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-active-bg)';
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.backgroundColor = 'var(--button-bg)';
+    });
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
 }
