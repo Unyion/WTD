@@ -655,7 +655,7 @@ function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
 async function checkForUpdates({ showStatus = false } = {}) {
     const autoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
     if (showStatus) {
-        weatherDisplay.textContent = '🔄 Checking for updates...';
+        showNotification('Checking for updates...', 'info');
     }
 
     try {
@@ -730,15 +730,6 @@ async function checkForUpdates({ showStatus = false } = {}) {
         if (showStatus) {
             const message = error?.message ? `Unable to check for updates: ${error.message}` : 'Unable to check for updates.';
             showNotification(message, 'warning');
-        }
-    } finally {
-        if (showStatus) {
-            // Reset weather text when done only if it was the status update
-            setTimeout(() => {
-                if (weatherDisplay.textContent.includes('Checking for updates')) {
-                    weatherDisplay.textContent = '🔄 Starting up...';
-                }
-            }, 1200);
         }
     }
 }
@@ -2431,7 +2422,7 @@ function showSettingsModal() {
         <div style="margin-bottom: 20px; position: relative;">
             <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: bold;">Location:</label>
             <div style="display: flex; gap: 8px; margin-bottom: 5px; position: relative;">
-                <input type="text" id="settingsLocation" placeholder="Start typing a city name..." style="
+                <input type="text" id="settingsLocation" placeholder="Type a city (optional)..." style="
                     flex: 1;
                     background-color: var(--input-bg);
                     color: var(--fg-light);
@@ -2443,20 +2434,9 @@ function showSettingsModal() {
                     position: relative;
                     z-index: 1;
                 " value="${currentLocation}" autocomplete="off">
-                <button id="detectLocationBtn" style="
-                    background-color: var(--accent);
-                    color: white;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    font-size: 10px;
-                    white-space: nowrap;
-                    transition: background-color 0.2s ease;
-                " title="Auto-detect your location">📍 Detect</button>
             </div>
             <div style="font-size: 10px; color: var(--fg-muted); font-style: italic;">
-                Leave blank to auto-detect on startup. Use format: City,State,Country
+                Leave this blank to auto-detect your location at startup. If entering manually, use City,State,Country.
             </div>
         </div>
 
@@ -2572,7 +2552,6 @@ function showSettingsModal() {
         // Get all the elements we need
         const saveBtn = document.getElementById('saveSettingsBtn');
         const cancelBtn = document.getElementById('cancelSettingsBtn');
-        const detectBtn = document.getElementById('detectLocationBtn');
         const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
         const locationInput = document.getElementById('settingsLocation');
         const overlay = document.getElementById('settings-modal-overlay');
@@ -2580,7 +2559,6 @@ function showSettingsModal() {
         console.log('Found elements:', {
             saveBtn: !!saveBtn,
             cancelBtn: !!cancelBtn, 
-            detectBtn: !!detectBtn,
             locationInput: !!locationInput,
             overlay: !!overlay
         });
@@ -2605,10 +2583,14 @@ function showSettingsModal() {
                     locationAutocomplete.searchLocations(query);
                 }, 300); // 300ms delay
             });
-            
-            // Test the event listener immediately
-            console.log('Testing input event listener...');
-            locationInput.dispatchEvent(new Event('input'));
+
+            // Keyboard navigation for autocomplete (Arrow keys, Enter, Escape)
+            locationInput.addEventListener('keydown', (e) => {
+                const handled = locationAutocomplete.handleKeyDown(e);
+                if (handled) {
+                    e.stopPropagation();
+                }
+            });
             
             console.log('Location input autocomplete setup complete');
         } else {
@@ -2628,36 +2610,6 @@ function showSettingsModal() {
             });
         }
         
-        if (detectBtn) {
-            detectBtn.addEventListener('click', async () => {
-                const originalText = detectBtn.textContent;
-                
-                try {
-                    detectBtn.textContent = '🔄 Detecting...';
-                    detectBtn.disabled = true;
-                    
-                    locationAutocomplete.hideSuggestions();
-                    localStorage.removeItem('wtd-cached-location');
-                    localStorage.removeItem('wtd-cache-timestamp');
-                    
-                    const detectedLocation = await attemptAutoLocationDetection();
-                    
-                    if (detectedLocation) {
-                        locationInput.value = detectedLocation;
-                        showNotification('Location detected successfully!', 'success');
-                    } else {
-                        showNotification('Could not detect location automatically', 'warning');
-                    }
-                } catch (error) {
-                    console.error('Manual location detection failed:', error);
-                    showNotification('Location detection failed', 'error');
-                } finally {
-                    detectBtn.textContent = originalText;
-                    detectBtn.disabled = false;
-                }
-            });
-        }
-
         if (checkUpdatesBtn) {
             checkUpdatesBtn.addEventListener('click', async () => {
                 checkUpdatesBtn.textContent = '🔄 Checking...';
@@ -2737,6 +2689,10 @@ function setupSettingsModalEventListeners() {
     const saveBtn = document.getElementById('saveSettingsBtn');
     const cancelBtn = document.getElementById('cancelSettingsBtn');
     const detectBtn = document.getElementById('detectLocationBtn');
+
+    if (!saveBtn || !cancelBtn) {
+        return;
+    }
     
     // Add hover effects for modal buttons
     saveBtn.addEventListener('mouseenter', () => {
@@ -2753,42 +2709,44 @@ function setupSettingsModalEventListeners() {
         cancelBtn.style.backgroundColor = 'var(--button-bg)';
     });
     
-    detectBtn.addEventListener('mouseenter', () => {
-        detectBtn.style.backgroundColor = '#2e7d32'; // Darker green
-    });
-    detectBtn.addEventListener('mouseleave', () => {
-        detectBtn.style.backgroundColor = 'var(--accent)';
-    });
-    
-    // Detect location button
-    detectBtn.addEventListener('click', async () => {
-        const originalText = detectBtn.textContent;
-        const locationInput = document.getElementById('settingsLocation');
-        
-        try {
-            detectBtn.textContent = '🔄 Detecting...';
-            detectBtn.disabled = true;
-            
-            // Clear any cached location to force fresh detection
-            localStorage.removeItem('wtd-cached-location');
-            localStorage.removeItem('wtd-cache-timestamp');
-            
-            const detectedLocation = await attemptAutoLocationDetection();
-            
-            if (detectedLocation) {
-                locationInput.value = detectedLocation;
-                showNotification('Location detected successfully!', 'success');
-            } else {
-                showNotification('Could not detect location automatically', 'warning');
+    if (detectBtn) {
+        detectBtn.addEventListener('mouseenter', () => {
+            detectBtn.style.backgroundColor = '#2e7d32'; // Darker green
+        });
+        detectBtn.addEventListener('mouseleave', () => {
+            detectBtn.style.backgroundColor = 'var(--accent)';
+        });
+
+        // Detect location button
+        detectBtn.addEventListener('click', async () => {
+            const originalText = detectBtn.textContent;
+            const locationInput = document.getElementById('settingsLocation');
+
+            try {
+                detectBtn.textContent = '🔄 Detecting...';
+                detectBtn.disabled = true;
+
+                // Clear any cached location to force fresh detection
+                localStorage.removeItem('wtd-cached-location');
+                localStorage.removeItem('wtd-cache-timestamp');
+
+                const detectedLocation = await attemptAutoLocationDetection();
+
+                if (detectedLocation) {
+                    locationInput.value = detectedLocation;
+                    showNotification('Location detected successfully!', 'success');
+                } else {
+                    showNotification('Could not detect location automatically', 'warning');
+                }
+            } catch (error) {
+                console.error('Manual location detection failed:', error);
+                showNotification('Location detection failed', 'error');
+            } finally {
+                detectBtn.textContent = originalText;
+                detectBtn.disabled = false;
             }
-        } catch (error) {
-            console.error('Manual location detection failed:', error);
-            showNotification('Location detection failed', 'error');
-        } finally {
-            detectBtn.textContent = originalText;
-            detectBtn.disabled = false;
-        }
-    });
+        });
+    }
     
     // Save button
     saveBtn.addEventListener('click', () => {
@@ -2829,7 +2787,7 @@ function setupSettingsModalEventListeners() {
 }
 
 // Save settings
-function saveSettings() {
+async function saveSettings() {
     const location = document.getElementById('settingsLocation').value.trim();
     const timeFormat = document.querySelector('input[name="timeFormat"]:checked').value;
     const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
@@ -2871,12 +2829,12 @@ function saveSettings() {
     // Refresh time options if format changed
     populateTimeOptions();
     
-    // Refresh weather with new settings
-    updateWeather();
+    // Refresh weather with new settings before optional update checks
+    await updateWeather();
 
     // Check for updates if auto-update was changed
     if (autoUpdateEnabled) {
-        checkForUpdates({ showStatus: true });
+        await checkForUpdates({ showStatus: true });
     }
     
     // Show success notification
