@@ -143,7 +143,7 @@ ipcMain.handle('updater:check-for-updates', async (event, options = {}) => {
     return {
       ok: false,
       started: false,
-      message: 'Auto-update is only available for installed Windows and macOS builds.'
+      message: 'Auto-update is currently available only for installed Windows and macOS builds. It is not available on Linux or when running from source.'
     };
   }
 
@@ -166,7 +166,7 @@ ipcMain.handle('updater:download-update', async () => {
     return {
       ok: false,
       started: false,
-      message: 'Auto-update is only available for installed Windows and macOS builds.'
+      message: 'Auto-update is currently available only for installed Windows and macOS builds. It is not available on Linux or when running from source.'
     };
   }
 
@@ -186,7 +186,7 @@ ipcMain.handle('updater:quit-and-install', async () => {
   if (!isUpdaterSupported()) {
     return {
       ok: false,
-      message: 'Auto-update is only available for installed Windows and macOS builds.'
+      message: 'Auto-update is currently available only for installed Windows and macOS builds. It is not available on Linux or when running from source.'
     };
   }
 

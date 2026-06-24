@@ -3641,6 +3641,12 @@ function showNotification(message, type = 'info') {
     // Remove existing notification
     const existingNotification = document.querySelector('.notification');
     if (existingNotification) {
+        if (existingNotification._dismissTimer) {
+            clearTimeout(existingNotification._dismissTimer);
+        }
+        if (existingNotification._cleanupTimer) {
+            clearTimeout(existingNotification._cleanupTimer);
+        }
         existingNotification.remove();
     }
     
@@ -3677,21 +3683,50 @@ function showNotification(message, type = 'info') {
     
     notification.textContent = message;
     document.body.appendChild(notification);
+
+    const displayDurationMs = 3000;
+    notification._remainingMs = displayDurationMs;
+    notification._dismissTimer = null;
+    notification._cleanupTimer = null;
+    notification._timerStartedAt = Date.now();
+
+    const hideNotification = () => {
+        notification.style.transform = 'translateX(100%)';
+        notification._cleanupTimer = setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    };
+
+    const scheduleDismiss = () => {
+        if (notification._dismissTimer) {
+            clearTimeout(notification._dismissTimer);
+        }
+        notification._timerStartedAt = Date.now();
+        notification._dismissTimer = setTimeout(hideNotification, notification._remainingMs);
+    };
     
     // Animate in
     setTimeout(() => {
         notification.style.transform = 'translateX(0)';
     }, 10);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
+
+    // Pause auto-dismiss while hovered.
+    notification.addEventListener('mouseenter', () => {
+        if (notification._dismissTimer) {
+            clearTimeout(notification._dismissTimer);
+            notification._dismissTimer = null;
+        }
+        const elapsedMs = Date.now() - notification._timerStartedAt;
+        notification._remainingMs = Math.max(300, notification._remainingMs - elapsedMs);
+    });
+
+    notification.addEventListener('mouseleave', () => {
+        scheduleDismiss();
+    });
+
+    scheduleDismiss();
 }
 
 // ============ HISTORY FUNCTIONS ============
