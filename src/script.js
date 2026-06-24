@@ -528,6 +528,8 @@ function setupUpdaterEventListeners() {
 }
 
 function handleUpdaterEvent(payload = {}) {
+    console.log('[updater:event]', payload);
+
     switch (payload.status) {
         case 'checking':
             if (payload.manual) {
@@ -585,6 +587,37 @@ function formatUpdaterError(message) {
 
     const compact = raw.replace(/\s+/g, ' ').trim();
     return compact.length > 220 ? `${compact.slice(0, 217)}...` : compact;
+}
+
+function normalizeReleaseNotes(releaseNotes) {
+    if (!releaseNotes) {
+        return '';
+    }
+
+    let raw = '';
+
+    if (Array.isArray(releaseNotes)) {
+        raw = releaseNotes.map((item) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object') {
+                return item.note || item.body || '';
+            }
+            return '';
+        }).join('\n\n');
+    } else if (typeof releaseNotes === 'object') {
+        raw = releaseNotes.note || releaseNotes.body || '';
+    } else {
+        raw = String(releaseNotes);
+    }
+
+    const scratch = document.createElement('div');
+    scratch.innerHTML = raw;
+    const plain = (scratch.textContent || scratch.innerText || '').trim();
+    if (!plain) {
+        return '';
+    }
+
+    return plain.length > 700 ? `${plain.slice(0, 697)}...` : plain;
 }
 
 async function showAutoUpdatePromptIfNeeded() {
@@ -751,10 +784,12 @@ function showUpdateAvailableModal(latestVersion, releaseNotes) {
         font-size: 13px;
     `;
 
+    const readableReleaseNotes = normalizeReleaseNotes(releaseNotes);
+
     modal.innerHTML = `
         <h2 style="color: var(--accent); margin-bottom: 18px; font-size: 20px; text-align: center;">Update Available</h2>
         <p style="margin-bottom: 16px; text-align: center; font-weight: 700; font-size: 14px;">Current: ${appVersion} — Latest: ${latestVersion}</p>
-        ${releaseNotes ? `<p style="font-size: 11px; color: var(--fg-muted); margin-bottom: 14px; max-height: 140px; overflow-y: auto;">${String(releaseNotes).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>` : ''}
+        ${readableReleaseNotes ? `<p style="font-size: 11px; color: var(--fg-muted); margin-bottom: 14px; max-height: 140px; overflow-y: auto; white-space: pre-wrap;">${readableReleaseNotes}</p>` : ''}
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
             <button id="downloadUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Download Update</button>
             <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Later</button>
