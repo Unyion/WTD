@@ -3,6 +3,7 @@ const { autoUpdater } = require('electron-updater');
 
 // Keep a global reference of the window object
 let mainWindow;
+let manualCheckPending = false;
 
 function isUpdaterSupported() {
   return app.isPackaged && (process.platform === 'win32' || process.platform === 'darwin');
@@ -19,22 +20,26 @@ function setupAutoUpdater() {
   autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('checking-for-update', () => {
-    sendUpdaterEvent({ status: 'checking' });
+    sendUpdaterEvent({ status: 'checking', manual: manualCheckPending });
   });
 
   autoUpdater.on('update-available', (info) => {
     sendUpdaterEvent({
       status: 'available',
       version: info?.version || '',
-      releaseNotes: info?.releaseNotes || ''
+      releaseNotes: info?.releaseNotes || '',
+      manual: manualCheckPending
     });
+    manualCheckPending = false;
   });
 
   autoUpdater.on('update-not-available', (info) => {
     sendUpdaterEvent({
       status: 'not-available',
-      version: info?.version || ''
+      version: info?.version || '',
+      manual: manualCheckPending
     });
+    manualCheckPending = false;
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -55,8 +60,10 @@ function setupAutoUpdater() {
   autoUpdater.on('error', (error) => {
     sendUpdaterEvent({
       status: 'error',
-      message: error?.message || 'Unknown updater error'
+      message: error?.message || 'Unknown updater error',
+      manual: manualCheckPending
     });
+    manualCheckPending = false;
   });
 }
 
@@ -149,10 +156,12 @@ ipcMain.handle('updater:check-for-updates', async (event, options = {}) => {
 
   try {
     const manual = options?.manual === true;
+    manualCheckPending = manual;
     sendUpdaterEvent({ status: 'checking', manual });
     await autoUpdater.checkForUpdates();
     return { ok: true, started: true };
   } catch (error) {
+    manualCheckPending = false;
     return {
       ok: false,
       started: false,
