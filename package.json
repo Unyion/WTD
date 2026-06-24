@@ -1,6 +1,6 @@
 {
   "name": "wtd-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "What To Do - Activity suggestion app based on weather and preferences",
   "main": "main.js",
   "homepage": "https://github.com/Unyion/WTD",
@@ -14,7 +14,15 @@
     "build": "electron-builder",
     "dist": "node scripts/run-dist.js"
   },
-  "keywords": ["activity", "weather", "recommendation", "desktop"],
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "keywords": [
+    "activity",
+    "weather",
+    "recommendation",
+    "desktop"
+  ],
   "author": {
     "name": "Jackson Bigelow",
     "email": "273222488+Unyion@users.noreply.github.com"
@@ -36,7 +44,11 @@
       "package.json"
     ],
     "mac": {
-      "category": "public.app-category.lifestyle"
+      "category": "public.app-category.lifestyle",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "target": "nsis"
@@ -59,6 +71,11 @@
         "deb",
         "rpm"
       ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Unyion",
+      "repo": "WTD"
     }
   }
 }

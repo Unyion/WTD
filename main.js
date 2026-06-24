@@ -1,8 +1,64 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
-const path = require('path');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 
 // Keep a global reference of the window object
 let mainWindow;
+
+function isUpdaterSupported() {
+  return app.isPackaged && (process.platform === 'win32' || process.platform === 'darwin');
+}
+
+function sendUpdaterEvent(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('updater:event', payload);
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdaterEvent({ status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    sendUpdaterEvent({
+      status: 'available',
+      version: info?.version || '',
+      releaseNotes: info?.releaseNotes || ''
+    });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    sendUpdaterEvent({
+      status: 'not-available',
+      version: info?.version || ''
+    });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdaterEvent({
+      status: 'download-progress',
+      percent: typeof progress?.percent === 'number' ? progress.percent : 0,
+      bytesPerSecond: progress?.bytesPerSecond || 0
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdaterEvent({
+      status: 'downloaded',
+      version: info?.version || ''
+    });
+  });
+
+  autoUpdater.on('error', (error) => {
+    sendUpdaterEvent({
+      status: 'error',
+      message: error?.message || 'Unknown updater error'
+    });
+  });
+}
 
 function createWindow() {
   // Create the browser window
@@ -21,15 +77,6 @@ function createWindow() {
     backgroundColor: '#212121',
     title: 'WTD'
   });
-
-  // Pass GitHub token to renderer if available (for private repo access)
-  if (process.env.GITHUB_TOKEN) {
-    mainWindow.webContents.on('did-finish-load', () => {
-      mainWindow.webContents.executeJavaScript(`
-        window.GITHUB_TOKEN = "${process.env.GITHUB_TOKEN}";
-      `);
-    });
-  }
 
   // Load the app
   mainWindow.loadFile('src/index.html');
@@ -51,7 +98,10 @@ function createWindow() {
 }
 
 // This method will be called when Electron has finished initialization
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  setupAutoUpdater();
+  createWindow();
+});
 
 // Quit when all windows are closed
 app.on('window-all-closed', () => {
@@ -88,7 +138,58 @@ ipcMain.handle('suggest-activity', async () => {
   return { name: 'Sample Activity', description: 'This is a test activity' };
 });
 
-ipcMain.handle('open-url', async (event, url) => {
-  // Open URL in default browser
-  await shell.openExternal(url);
+ipcMain.handle('updater:check-for-updates', async (event, options = {}) => {
+  if (!isUpdaterSupported()) {
+    return {
+      ok: false,
+      started: false,
+      message: 'Auto-update is only available for installed Windows and macOS builds.'
+    };
+  }
+
+  try {
+    const manual = options?.manual === true;
+    sendUpdaterEvent({ status: 'checking', manual });
+    await autoUpdater.checkForUpdates();
+    return { ok: true, started: true };
+  } catch (error) {
+    return {
+      ok: false,
+      started: false,
+      message: error?.message || 'Unable to check for updates.'
+    };
+  }
+});
+
+ipcMain.handle('updater:download-update', async () => {
+  if (!isUpdaterSupported()) {
+    return {
+      ok: false,
+      started: false,
+      message: 'Auto-update is only available for installed Windows and macOS builds.'
+    };
+  }
+
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true, started: true };
+  } catch (error) {
+    return {
+      ok: false,
+      started: false,
+      message: error?.message || 'Unable to download update.'
+    };
+  }
+});
+
+ipcMain.handle('updater:quit-and-install', async () => {
+  if (!isUpdaterSupported()) {
+    return {
+      ok: false,
+      message: 'Auto-update is only available for installed Windows and macOS builds.'
+    };
+  }
+
+  setImmediate(() => autoUpdater.quitAndInstall());
+  return { ok: true };
 });

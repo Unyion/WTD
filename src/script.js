@@ -22,8 +22,12 @@ const activityNameInput = document.getElementById('activityName');
 const tellMeWhatToDoButton = document.getElementById('tellMeWhatToDo');
 const weatherDisplay = document.getElementById('weatherDisplay');
 const settingsButton = document.getElementById('settingsButton');
-const { version: appVersion, name: appName } = require('../package.json');
-const updateRepoUrl = 'https://github.com/Unyion/WTD/releases/latest';
+const { version: appVersion } = require('../package.json');
+const { ipcRenderer } = require('electron');
+
+let updaterListenersInitialized = false;
+let updaterDownloadInProgress = false;
+let lastUpdateProgressNotice = -1;
 
 // Weather forecast caching
 const weatherForecast = {
@@ -306,6 +310,8 @@ const locationAutocomplete = {
 // Enhanced app initialization
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('App initialized at:', new Date().toLocaleTimeString());
+
+    setupUpdaterEventListeners();
     
     // Setup basic functionality first
     setupEventListeners();
@@ -345,7 +351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const autoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
     if (autoUpdateEnabled) {
-        await checkForUpdates({ showStatus: false });
+        await requestUpdateCheck({ showStatus: false });
     }
 
     // Initialize weather with auto-detection
@@ -509,17 +515,60 @@ function setupEventListeners() {
     });
 }
 
-function isVersionNewer(latest, current) {
-    const parse = (version) => version.replace(/^v/, '').split('.').map(num => parseInt(num, 10) || 0);
-    const latestParts = parse(latest);
-    const currentParts = parse(current);
-    for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
-        const latestValue = latestParts[i] || 0;
-        const currentValue = currentParts[i] || 0;
-        if (latestValue > currentValue) return true;
-        if (latestValue < currentValue) return false;
+function setupUpdaterEventListeners() {
+    if (updaterListenersInitialized || !ipcRenderer) {
+        return;
     }
-    return false;
+
+    ipcRenderer.on('updater:event', (event, payload) => {
+        handleUpdaterEvent(payload);
+    });
+
+    updaterListenersInitialized = true;
+}
+
+function handleUpdaterEvent(payload = {}) {
+    switch (payload.status) {
+        case 'checking':
+            if (payload.manual) {
+                showNotification('Checking for updates...', 'info');
+            }
+            break;
+
+        case 'available':
+            showUpdateAvailableModal(payload.version || 'new version', payload.releaseNotes || '');
+            break;
+
+        case 'not-available':
+            if (payload.manual) {
+                showNotification('You are running the latest version.', 'success');
+            }
+            break;
+
+        case 'download-progress': {
+            const percent = Math.max(0, Math.min(100, Math.round(payload.percent || 0)));
+            if (percent % 10 === 0 && percent !== lastUpdateProgressNotice) {
+                lastUpdateProgressNotice = percent;
+                showNotification(`Downloading update... ${percent}%`, 'info');
+            }
+            break;
+        }
+
+        case 'downloaded':
+            updaterDownloadInProgress = false;
+            lastUpdateProgressNotice = -1;
+            showUpdateReadyModal(payload.version || 'latest');
+            break;
+
+        case 'error':
+            updaterDownloadInProgress = false;
+            lastUpdateProgressNotice = -1;
+            showNotification(`Updater error: ${payload.message || 'Unknown error'}`, 'warning');
+            break;
+
+        default:
+            break;
+    }
 }
 
 async function showAutoUpdatePromptIfNeeded() {
@@ -597,7 +646,67 @@ async function showAutoUpdatePromptIfNeeded() {
     });
 }
 
-function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
+async function requestUpdateCheck({ showStatus = false } = {}) {
+    if (!ipcRenderer) {
+        if (showStatus) {
+            showNotification('Updater is unavailable in this build.', 'warning');
+        }
+        return;
+    }
+
+    try {
+        const result = await ipcRenderer.invoke('updater:check-for-updates', { manual: showStatus });
+        if (!result?.ok && showStatus) {
+            showNotification(result?.message || 'Unable to check for updates.', 'warning');
+        }
+    } catch (error) {
+        console.error('Error requesting update check:', error);
+        if (showStatus) {
+            showNotification('Unable to check for updates.', 'warning');
+        }
+    }
+}
+
+async function startUpdateDownload(latestVersion) {
+    if (updaterDownloadInProgress) {
+        showNotification('An update is already downloading.', 'info');
+        return;
+    }
+
+    try {
+        const result = await ipcRenderer.invoke('updater:download-update');
+        if (!result?.ok) {
+            showNotification(result?.message || 'Unable to download update.', 'warning');
+            return;
+        }
+
+        updaterDownloadInProgress = true;
+        lastUpdateProgressNotice = -1;
+        showNotification(`Downloading update ${latestVersion}...`, 'info');
+    } catch (error) {
+        console.error('Error starting update download:', error);
+        showNotification('Unable to download update.', 'warning');
+    }
+}
+
+async function installDownloadedUpdate() {
+    try {
+        const result = await ipcRenderer.invoke('updater:quit-and-install');
+        if (!result?.ok) {
+            showNotification(result?.message || 'Unable to install update.', 'warning');
+        }
+    } catch (error) {
+        console.error('Error installing update:', error);
+        showNotification('Unable to install update.', 'warning');
+    }
+}
+
+function showUpdateAvailableModal(latestVersion, releaseNotes) {
+    const existing = document.getElementById('update-available-overlay');
+    if (existing) {
+        existing.remove();
+    }
+
     const overlay = document.createElement('div');
     overlay.id = 'update-available-overlay';
     overlay.style.cssText = `
@@ -629,109 +738,80 @@ function showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl) {
     modal.innerHTML = `
         <h2 style="color: var(--accent); margin-bottom: 18px; font-size: 20px; text-align: center;">Update Available</h2>
         <p style="margin-bottom: 16px; text-align: center; font-weight: 700; font-size: 14px;">Current: ${appVersion} — Latest: ${latestVersion}</p>
+        ${releaseNotes ? `<p style="font-size: 11px; color: var(--fg-muted); margin-bottom: 14px; max-height: 140px; overflow-y: auto;">${String(releaseNotes).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>` : ''}
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <button id="openReleasePageBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Open Release Page</button>
-            <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Dismiss</button>
+            <button id="downloadUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Download Update</button>
+            <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Later</button>
         </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('openReleasePageBtn').addEventListener('click', async () => {
-        try {
-            const { ipcRenderer } = require('electron');
-            await ipcRenderer.invoke('open-url', releaseUrl);
-        } catch (error) {
-            console.error('Failed to open URL via IPC:', error);
-            window.open(releaseUrl, '_blank');
-        }
+    document.getElementById('downloadUpdateBtn').addEventListener('click', async () => {
+        await startUpdateDownload(latestVersion);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     });
+
     document.getElementById('dismissUpdateBtn').addEventListener('click', () => {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     });
 }
 
-async function checkForUpdates({ showStatus = false } = {}) {
-    const autoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
-    if (showStatus) {
-        showNotification('Checking for updates...', 'info');
+function showUpdateReadyModal(latestVersion) {
+    const existing = document.getElementById('update-ready-overlay');
+    if (existing) {
+        existing.remove();
     }
 
-    try {
-        // Build headers with optional authentication for private repos
-        const headers = {
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': `${appName}/${appVersion}`
-        };
-        
-        // Check for GitHub token in environment (set via process.env.GITHUB_TOKEN)
-        // This is needed for private repositories
-        const githubToken = typeof window !== 'undefined' && window.GITHUB_TOKEN 
-            ? window.GITHUB_TOKEN 
-            : process.env?.GITHUB_TOKEN;
-        
-        if (githubToken) {
-            headers['Authorization'] = `token ${githubToken}`;
-        }
+    const overlay = document.createElement('div');
+    overlay.id = 'update-ready-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.75);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
 
-        const response = await fetch('https://api.github.com/repos/Unyion/WTD/releases/latest', {
-            headers: headers
-        });
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background-color: var(--bg-dark);
+        border: 2px solid var(--accent);
+        border-radius: 12px;
+        padding: 28px;
+        max-width: 400px;
+        width: 100%;
+        color: var(--fg-light);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+    `;
 
-        let latestTag;
-        let releaseNotes = '';
-        let releaseUrl = updateRepoUrl;
+    modal.innerHTML = `
+        <h2 style="color: var(--accent); margin-bottom: 18px; font-size: 20px; text-align: center;">Update Ready</h2>
+        <p style="margin-bottom: 16px; text-align: center; font-weight: 700; font-size: 14px;">Version ${latestVersion} has been downloaded.</p>
+        <p style="margin-bottom: 16px; text-align: center; color: var(--fg-muted);">Restart now to install the update.</p>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button id="restartToUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Restart and Install</button>
+            <button id="laterToUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Later</button>
+        </div>
+    `;
 
-        if (response.status === 404) {
-            // If there is no canonical latest release (e.g. only prereleases), try the releases list
-            const releasesResponse = await fetch('https://api.github.com/repos/Unyion/WTD/releases?per_page=1', {
-                headers: headers
-            });
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
 
-            if (releasesResponse.ok) {
-                const releasesData = await releasesResponse.json();
-                if (Array.isArray(releasesData) && releasesData.length > 0) {
-                    latestTag = releasesData[0].tag_name || releasesData[0].name || '';
-                    releaseNotes = releasesData[0].body || '';
-                    releaseUrl = releasesData[0].html_url || updateRepoUrl;
-                } else {
-                    throw new Error('No releases found for this repository.');
-                }
-            } else {
-                const body = await releasesResponse.text().catch(() => '');
-                throw new Error(`Update check failed: ${releasesResponse.status}${body ? ` - ${body}` : ''}`);
-            }
-        } else {
-            if (!response.ok) {
-                const body = await response.text().catch(() => '');
-                throw new Error(`Update check failed: ${response.status}${body ? ` - ${body}` : ''}`);
-            }
+    document.getElementById('restartToUpdateBtn').addEventListener('click', async () => {
+        await installDownloadedUpdate();
+    });
 
-            const data = await response.json();
-            latestTag = data.tag_name || data.name || '';
-            releaseNotes = data.body || '';
-            releaseUrl = data.html_url || updateRepoUrl;
-        }
-        const latestVersion = (latestTag || '').replace(/^v/, '');
-
-        if (isVersionNewer(latestVersion, appVersion)) {
-            showNotification(`Update available: ${latestVersion}`, 'success');
-            if (autoUpdateEnabled) {
-                showUpdateAvailableModal(latestVersion, releaseNotes, releaseUrl);
-            } else if (showStatus) {
-                showNotification('Update available. Enable auto updates in settings for prompts.', 'info');
-            }
-        } else if (showStatus) {
-            showNotification('You are running the latest version.', 'success');
-        }
-    } catch (error) {
-        console.error('Error checking for updates:', error);
-        if (showStatus) {
-            const message = error?.message ? `Unable to check for updates: ${error.message}` : 'Unable to check for updates.';
-            showNotification(message, 'warning');
-        }
-    }
+    document.getElementById('laterToUpdateBtn').addEventListener('click', () => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    });
 }
 
 // Enhanced getUserLocation function with auto-detection
@@ -2615,7 +2695,7 @@ function showSettingsModal() {
                 checkUpdatesBtn.textContent = '🔄 Checking...';
                 checkUpdatesBtn.disabled = true;
                 try {
-                    await checkForUpdates({ showStatus: true });
+                    await requestUpdateCheck({ showStatus: true });
                 } finally {
                     checkUpdatesBtn.textContent = 'Check for updates';
                     checkUpdatesBtn.disabled = false;
@@ -2793,6 +2873,7 @@ async function saveSettings() {
     const tempUnit = document.querySelector('input[name="tempUnit"]:checked').value;
     const theme = document.querySelector('input[name="theme"]:checked').value;
     const autoUpdateEnabled = document.getElementById('settingsAutoUpdate')?.checked === true;
+    const previousAutoUpdateEnabled = localStorage.getItem('wtd-auto-update-enabled') === 'true';
     const weatherBuffer = parseInt(document.getElementById('weatherBufferSlider')?.value || '120', 10);
     
     // Get current temperature unit before saving
@@ -2832,9 +2913,9 @@ async function saveSettings() {
     // Refresh weather with new settings before optional update checks
     await updateWeather();
 
-    // Check for updates if auto-update was changed
-    if (autoUpdateEnabled) {
-        await checkForUpdates({ showStatus: true });
+    // Run an immediate check only when auto-update gets newly enabled.
+    if (autoUpdateEnabled && !previousAutoUpdateEnabled) {
+        await requestUpdateCheck({ showStatus: true });
     }
     
     // Show success notification

@@ -39,6 +39,7 @@ Click the gear icon (⚙️) to configure:
 - **Time Format**: 12-hour vs 24-hour display
 - **Temperature Unit**: Fahrenheit vs Celsius
 - **Theme**: Light, Dark, or Auto (follows system)
+- **Auto Updates**: One-time opt-in; when enabled the app checks on startup, prompts before download, then prompts to restart and install
 
 ## 🛠️ Development
 
