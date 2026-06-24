@@ -563,12 +563,28 @@ function handleUpdaterEvent(payload = {}) {
         case 'error':
             updaterDownloadInProgress = false;
             lastUpdateProgressNotice = -1;
-            showNotification(`Updater error: ${payload.message || 'Unknown error'}`, 'warning');
+            showNotification(`Updater error: ${formatUpdaterError(payload.message)}`, 'warning');
             break;
 
         default:
             break;
     }
+}
+
+function formatUpdaterError(message) {
+    const raw = typeof message === 'string' ? message : '';
+    const normalized = raw.toLowerCase();
+
+    if (normalized.includes('.yml') && (normalized.includes('cannot find') || normalized.includes('not found') || normalized.includes('404'))) {
+        return 'Update metadata is not ready on GitHub yet. Try again in a few minutes.';
+    }
+
+    if (!raw) {
+        return 'Unknown error.';
+    }
+
+    const compact = raw.replace(/\s+/g, ' ').trim();
+    return compact.length > 220 ? `${compact.slice(0, 217)}...` : compact;
 }
 
 async function showAutoUpdatePromptIfNeeded() {
@@ -3653,6 +3669,10 @@ function showNotification(message, type = 'info') {
         transform: translateX(100%);
         transition: transform 0.3s ease;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        max-width: min(420px, calc(100vw - 40px));
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.35;
     `;
     
     notification.textContent = message;
