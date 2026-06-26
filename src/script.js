@@ -2629,8 +2629,9 @@ function showSettingsModal() {
             <div style="font-size: 10px; color: var(--fg-muted); margin-top: 8px; line-height: 1.4;">
                 The app will check for updates when it launches and notify you if a newer version is available.
             </div>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
-                <button id="checkUpdatesBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: 1px solid var(--button-active-bg); padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 12px;">Check for updates</button>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                <button id="checkUpdatesBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: 1px solid var(--button-active-bg); padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;">Check for updates</button>
+                <span id="currentVersionText" style="font-size: 10px; color: var(--fg-muted);">Current version: ${appVersion}</span>
             </div>
         </div>
 
@@ -2730,18 +2731,93 @@ function showSettingsModal() {
         
         // Setup other event listeners
         if (saveBtn) {
+            const defaultSaveButtonStyle = {
+                backgroundColor: 'var(--accent)',
+                borderColor: 'transparent',
+                transform: 'translateY(0)',
+                boxShadow: 'none'
+            };
+
+            const hoverSaveButtonStyle = {
+                backgroundColor: '#2e7d32',
+                borderColor: 'transparent',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)'
+            };
+
+            const applySaveButtonStyle = (style) => {
+                saveBtn.style.backgroundColor = style.backgroundColor;
+                saveBtn.style.borderColor = style.borderColor;
+                saveBtn.style.transform = style.transform;
+                saveBtn.style.boxShadow = style.boxShadow;
+            };
+
+            applySaveButtonStyle(defaultSaveButtonStyle);
+            saveBtn.addEventListener('mouseenter', () => applySaveButtonStyle(hoverSaveButtonStyle));
+            saveBtn.addEventListener('mouseleave', () => applySaveButtonStyle(defaultSaveButtonStyle));
+
             saveBtn.addEventListener('click', () => {
                 saveSettings();
             });
         }
         
         if (cancelBtn) {
+            const defaultCancelButtonStyle = {
+                backgroundColor: 'var(--button-bg)',
+                borderColor: 'transparent',
+                transform: 'translateY(0)',
+                boxShadow: 'none'
+            };
+
+            const hoverCancelButtonStyle = {
+                backgroundColor: '#d32f2f',
+                borderColor: 'transparent',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)'
+            };
+
+            const applyCancelButtonStyle = (style) => {
+                cancelBtn.style.backgroundColor = style.backgroundColor;
+                cancelBtn.style.borderColor = style.borderColor;
+                cancelBtn.style.transform = style.transform;
+                cancelBtn.style.boxShadow = style.boxShadow;
+            };
+
+            applyCancelButtonStyle(defaultCancelButtonStyle);
+            cancelBtn.addEventListener('mouseenter', () => applyCancelButtonStyle(hoverCancelButtonStyle));
+            cancelBtn.addEventListener('mouseleave', () => applyCancelButtonStyle(defaultCancelButtonStyle));
+
             cancelBtn.addEventListener('click', () => {
                 closeSettingsModal();
             });
         }
         
         if (checkUpdatesBtn) {
+            const defaultCheckButtonStyle = {
+                backgroundColor: 'var(--button-bg)',
+                borderColor: 'var(--button-active-bg)',
+                transform: 'translateY(0)',
+                boxShadow: 'none'
+            };
+
+            const hoverCheckButtonStyle = {
+                backgroundColor: 'var(--button-active-bg)',
+                borderColor: 'var(--accent)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)'
+            };
+
+            const applyCheckButtonStyle = (style) => {
+                checkUpdatesBtn.style.backgroundColor = style.backgroundColor;
+                checkUpdatesBtn.style.borderColor = style.borderColor;
+                checkUpdatesBtn.style.transform = style.transform;
+                checkUpdatesBtn.style.boxShadow = style.boxShadow;
+            };
+
+            applyCheckButtonStyle(defaultCheckButtonStyle);
+            checkUpdatesBtn.addEventListener('mouseenter', () => applyCheckButtonStyle(hoverCheckButtonStyle));
+            checkUpdatesBtn.addEventListener('mouseleave', () => applyCheckButtonStyle(defaultCheckButtonStyle));
+
             checkUpdatesBtn.addEventListener('click', async () => {
                 checkUpdatesBtn.textContent = '🔄 Checking...';
                 checkUpdatesBtn.disabled = true;
