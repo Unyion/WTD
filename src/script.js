@@ -28,6 +28,7 @@ const { ipcRenderer } = require('electron');
 let updaterListenersInitialized = false;
 let updaterDownloadInProgress = false;
 let lastUpdateProgressNotice = -1;
+let updaterErrorNotificationSuppressedUntil = 0;
 
 // Weather forecast caching
 const weatherForecast = {
@@ -563,8 +564,22 @@ function handleUpdaterEvent(payload = {}) {
             break;
 
         case 'error':
+            const shouldSuppress = Date.now() < updaterErrorNotificationSuppressedUntil;
+            const wasDownloading = updaterDownloadInProgress;
             updaterDownloadInProgress = false;
             lastUpdateProgressNotice = -1;
+
+            if (shouldSuppress) {
+                updaterErrorNotificationSuppressedUntil = 0;
+                break;
+            }
+
+            if (wasDownloading) {
+                showUpdateDownloadFailure('Unable to download the update right now. Please try again in a moment.');
+                break;
+            }
+
+            closeUpdateAvailableModalIfOpen();
             showNotification(`Updater error: ${formatUpdaterError(payload.message)}`, 'warning');
             break;
 
@@ -716,25 +731,75 @@ async function requestUpdateCheck({ showStatus = false } = {}) {
     }
 }
 
+function closeUpdateAvailableModalIfOpen() {
+    const overlay = document.getElementById('update-available-overlay');
+    if (overlay?.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+    }
+}
+
+function showUpdateDownloadFailure(message, { suppressDuplicateMs = 0 } = {}) {
+    closeUpdateAvailableModalIfOpen();
+
+    if (suppressDuplicateMs > 0) {
+        updaterErrorNotificationSuppressedUntil = Date.now() + suppressDuplicateMs;
+    }
+
+    showNotification(message, 'warning');
+}
+
+function invokeUpdaterDownloadWithTimeout(timeoutMs) {
+    return Promise.race([
+        ipcRenderer.invoke('updater:download-update'),
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('UPDATE_DOWNLOAD_TIMEOUT')), timeoutMs);
+        })
+    ]);
+}
+
 async function startUpdateDownload(latestVersion) {
+    const downloadTimeoutMs = 60000;
+
     if (updaterDownloadInProgress) {
         showNotification('An update is already downloading.', 'info');
-        return;
+        return { ok: false, reason: 'already-in-progress' };
     }
 
     try {
-        const result = await ipcRenderer.invoke('updater:download-update');
+        const result = await invokeUpdaterDownloadWithTimeout(downloadTimeoutMs);
         if (!result?.ok) {
-            showNotification(result?.message || 'Unable to download update.', 'warning');
-            return;
+            showUpdateDownloadFailure('Unable to download the update right now. Please try again in a moment.', {
+                suppressDuplicateMs: 8000
+            });
+            return {
+                ok: false,
+                reason: 'updater-rejected',
+                message: result?.message || ''
+            };
         }
 
         updaterDownloadInProgress = true;
         lastUpdateProgressNotice = -1;
         showNotification(`Downloading update ${latestVersion}...`, 'info');
+        return { ok: true };
     } catch (error) {
         console.error('Error starting update download:', error);
-        showNotification('Unable to download update.', 'warning');
+
+        if (error?.message === 'UPDATE_DOWNLOAD_TIMEOUT') {
+            showUpdateDownloadFailure('Download is taking longer than expected. Please try again in a moment.', {
+                suppressDuplicateMs: 12000
+            });
+            return { ok: false, reason: 'timeout' };
+        }
+
+        showUpdateDownloadFailure('Unable to download the update right now. Please try again in a moment.', {
+            suppressDuplicateMs: 8000
+        });
+        return {
+            ok: false,
+            reason: 'ipc-error',
+            message: error?.message || ''
+        };
     }
 }
 
@@ -790,22 +855,43 @@ function showUpdateAvailableModal(latestVersion, releaseNotes) {
         <h2 style="color: var(--accent); margin-bottom: 18px; font-size: 20px; text-align: center;">Update Available</h2>
         <p style="margin-bottom: 16px; text-align: center; font-weight: 700; font-size: 14px;">Current: ${appVersion} — Latest: ${latestVersion}</p>
         ${readableReleaseNotes ? `<p style="font-size: 11px; color: var(--fg-muted); margin-bottom: 14px; max-height: 140px; overflow-y: auto; white-space: pre-wrap;">${readableReleaseNotes}</p>` : ''}
-        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <button id="downloadUpdateBtn" style="background-color: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">Download Update</button>
-            <button id="dismissUpdateBtn" style="background-color: var(--button-bg); color: var(--fg-light); border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer;">Later</button>
+        <div class="update-modal-actions">
+            <button id="downloadUpdateBtn" class="update-modal-btn update-modal-btn-primary">Download Update</button>
+            <button id="dismissUpdateBtn" class="update-modal-btn update-modal-btn-secondary">Later</button>
         </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('downloadUpdateBtn').addEventListener('click', async () => {
-        await startUpdateDownload(latestVersion);
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    const downloadButton = document.getElementById('downloadUpdateBtn');
+    const dismissButton = document.getElementById('dismissUpdateBtn');
+
+    downloadButton.addEventListener('click', async () => {
+        if (downloadButton.dataset.loading === 'true') {
+            return;
+        }
+
+        downloadButton.dataset.loading = 'true';
+        downloadButton.disabled = true;
+        downloadButton.classList.add('is-loading');
+        downloadButton.innerHTML = `
+            <span>Downloading</span>
+            <span class="update-modal-loading-dots" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </span>
+        `;
+
+        dismissButton.textContent = 'Close';
+
+        const result = await startUpdateDownload(latestVersion);
+        if (result?.ok) {
+            closeUpdateAvailableModalIfOpen();
+        }
     });
 
-    document.getElementById('dismissUpdateBtn').addEventListener('click', () => {
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    dismissButton.addEventListener('click', () => {
+        closeUpdateAvailableModalIfOpen();
     });
 }
 
